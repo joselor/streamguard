@@ -1,0 +1,44 @@
+# IDEs
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# Build artifacts
+target/
+build/
+*.class
+*.o
+*.so
+*.dylib
+*.a
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# RocksDB data
+*.sst
+*.log
+MANIFEST-*
+CURRENT
+LOCK
+*.db/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+*.env
+.env.*
+secrets/
+
+# Logs
+*.log
+logs/
+

@@ -1,0 +1,43 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'streamguard'
+
+# Alerting configuration (optional for now)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Stream Processor metrics (C++ application)
+  - job_name: 'stream-processor'
+    static_configs:
+      - targets: ['host.docker.internal:8081']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # Query API metrics (Spring Boot application)
+  - job_name: 'query-api'
+    static_configs:
+      - targets: ['host.docker.internal:8080']
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 10s
+
+  # Kafka JMX metrics (if enabled)
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka:9093']
+    scrape_interval: 30s
+
+  # Future: Add more services here as needed
+  # - job_name: 'event-generator'
+  #   static_configs:
+  #     - targets: ['host.docker.internal:8082']
