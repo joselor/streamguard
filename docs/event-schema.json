@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "StreamGuard Security Event",
+  "description": "Schema for security events in the StreamGuard platform",
+  "type": "object",
+  "required": ["event_id", "timestamp", "event_type"],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "description": "Unique event identifier",
+      "pattern": "^evt_[a-zA-Z0-9]{12}$"
+    },
+    "timestamp": {
+      "type": "integer",
+      "description": "Unix timestamp in milliseconds",
+      "minimum": 0
+    },
+    "event_type": {
+      "type": "string",
+      "enum": ["auth_attempt", "network_connection", "file_access", "process_execution", "dns_query"],
+      "description": "Type of security event"
+    },
+    "source_ip": {
+      "type": "string",
+      "description": "Source IP address",
+      "format": "ipv4"
+    },
+    "destination_ip": {
+      "type": "string",
+      "description": "Destination IP address (for network events)",
+      "format": "ipv4"
+    },
+    "user": {
+      "type": "string",
+      "description": "Username associated with event"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["success", "failed", "blocked", "pending"],
+      "description": "Status of the event"
+    },
+    "threat_score": {
+      "type": "number",
+      "description": "AI-calculated threat score (0-1)",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Event-specific metadata",
+      "properties": {
+        "user_agent": {"type": "string"},
+        "geo_location": {"type": "string", "pattern": "^[A-Z]{2}-[A-Z]{2}-.*$"},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+        "protocol": {"type": "string"},
+        "file_path": {"type": "string"},
+        "process_name": {"type": "string"},
+        "domain": {"type": "string"},
+        "bytes_transferred": {"type": "integer", "minimum": 0}
+      }
+    }
+  },
+  "examples": [
+    {
+      "event_id": "evt_a1b2c3d4e5f6",
+      "timestamp": 1704067200000,
+      "event_type": "auth_attempt",
+      "source_ip": "192.168.1.100",
+      "destination_ip": "10.0.0.5",
+      "user": "admin",
+      "status": "failed",
+      "threat_score": 0.85,
+      "metadata": {
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "geo_location": "US-MN-Minneapolis"
+      }
+    }
+  ]
+}

@@ -1,0 +1,157 @@
+{
+  "sample_events": [
+    {
+      "name": "Successful Authentication",
+      "event": {
+        "event_id": "evt_a1b2c3d4e5f6",
+        "timestamp": 1704067200000,
+        "event_type": "auth_attempt",
+        "source_ip": "192.168.1.100",
+        "destination_ip": "10.0.0.5",
+        "user": "alice",
+        "status": "success",
+        "threat_score": 0.05,
+        "metadata": {
+          "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+          "geo_location": "US-MN-Minneapolis"
+        }
+      }
+    },
+    {
+      "name": "Failed Authentication (High Threat)",
+      "event": {
+        "event_id": "evt_x9y8z7w6v5u4",
+        "timestamp": 1704067260000,
+        "event_type": "auth_attempt",
+        "source_ip": "203.45.67.89",
+        "destination_ip": "10.0.0.5",
+        "user": "admin",
+        "status": "failed",
+        "threat_score": 0.85,
+        "metadata": {
+          "user_agent": "curl/7.68.0",
+          "geo_location": "RU-MOW-Moscow"
+        }
+      }
+    },
+    {
+      "name": "Network Connection (Suspicious Port)",
+      "event": {
+        "event_id": "evt_m5n6o7p8q9r0",
+        "timestamp": 1704067320000,
+        "event_type": "network_connection",
+        "source_ip": "192.168.1.50",
+        "destination_ip": "185.220.101.5",
+        "user": "bob",
+        "status": "success",
+        "threat_score": 0.62,
+        "metadata": {
+          "port": 9050,
+          "protocol": "TCP",
+          "bytes_transferred": 1048576,
+          "geo_location": "US-CA-San Francisco"
+        }
+      }
+    },
+    {
+      "name": "File Access (Sensitive Data)",
+      "event": {
+        "event_id": "evt_t1u2v3w4x5y6",
+        "timestamp": 1704067380000,
+        "event_type": "file_access",
+        "source_ip": "192.168.1.75",
+        "user": "charlie",
+        "status": "success",
+        "threat_score": 0.45,
+        "metadata": {
+          "file_path": "/etc/shadow",
+          "geo_location": "US-NY-New York"
+        }
+      }
+    },
+    {
+      "name": "Process Execution (Malicious Binary)",
+      "event": {
+        "event_id": "evt_d7e8f9g0h1i2",
+        "timestamp": 1704067440000,
+        "event_type": "process_execution",
+        "source_ip": "192.168.1.120",
+        "user": "david",
+        "status": "blocked",
+        "threat_score": 0.95,
+        "metadata": {
+          "process_name": "cryptominer.exe",
+          "file_path": "/tmp/malware/cryptominer.exe",
+          "geo_location": "US-TX-Austin"
+        }
+      }
+    },
+    {
+      "name": "DNS Query (Command & Control)",
+      "event": {
+        "event_id": "evt_j3k4l5m6n7o8",
+        "timestamp": 1704067500000,
+        "event_type": "dns_query",
+        "source_ip": "192.168.1.95",
+        "user": "eve",
+        "status": "success",
+        "threat_score": 0.78,
+        "metadata": {
+          "domain": "c2server.suspicious.com",
+          "protocol": "UDP",
+          "port": 53,
+          "geo_location": "US-WA-Seattle"
+        }
+      }
+    },
+    {
+      "name": "Brute Force Attack Pattern",
+      "description": "Multiple failed auth attempts followed by success",
+      "events": [
+        {
+          "event_id": "evt_bf1000000001",
+          "timestamp": 1704067600000,
+          "event_type": "auth_attempt",
+          "source_ip": "89.163.145.23",
+          "destination_ip": "10.0.0.5",
+          "user": "admin",
+          "status": "failed",
+          "threat_score": 0.50
+        },
+        {
+          "event_id": "evt_bf1000000002",
+          "timestamp": 1704067610000,
+          "event_type": "auth_attempt",
+          "source_ip": "89.163.145.23",
+          "destination_ip": "10.0.0.5",
+          "user": "admin",
+          "status": "failed",
+          "threat_score": 0.60
+        },
+        {
+          "event_id": "evt_bf1000000003",
+          "timestamp": 1704067620000,
+          "event_type": "auth_attempt",
+          "source_ip": "89.163.145.23",
+          "destination_ip": "10.0.0.5",
+          "user": "admin",
+          "status": "failed",
+          "threat_score": 0.70
+        },
+        {
+          "event_id": "evt_bf1000000004",
+          "timestamp": 1704067630000,
+          "event_type": "auth_attempt",
+          "source_ip": "89.163.145.23",
+          "destination_ip": "10.0.0.5",
+          "user": "admin",
+          "status": "success",
+          "threat_score": 0.90,
+          "metadata": {
+            "geo_location": "CN-BJ-Beijing"
+          }
+        }
+      ]
+    }
+  ]
+}
