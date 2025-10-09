@@ -29,6 +29,9 @@ find_package(nlohmann_json 3.2.0 REQUIRED)
 find_library(RDKAFKA_LIB rdkafka++ REQUIRED)
 find_path(RDKAFKA_INCLUDE_DIR librdkafka/rdkafkacpp.h REQUIRED)
 
+# Find RocksDB (required for event storage)
+find_package(RocksDB REQUIRED)
+
 # Optional: Google Test for unit testing
 find_package(GTest QUIET)
 
@@ -46,10 +49,24 @@ set(CONSUMER_SOURCES
     src/kafka_consumer.cpp
 )
 
+set(STORE_SOURCES
+    src/event_store.cpp
+)
+
 # Create library from event.cpp
 add_library(streamguard_event STATIC ${EVENT_SOURCES})
 
 target_link_libraries(streamguard_event
+    nlohmann_json::nlohmann_json
+    pthread
+)
+
+# Create library from event_store.cpp
+add_library(streamguard_store STATIC ${STORE_SOURCES})
+
+target_link_libraries(streamguard_store
+    streamguard_event
+    RocksDB::rocksdb
     nlohmann_json::nlohmann_json
     pthread
 )
@@ -71,8 +88,10 @@ add_executable(stream-processor
 
 target_link_libraries(stream-processor
     streamguard_consumer
+    streamguard_store
     streamguard_event
     ${RDKAFKA_LIB}
+    RocksDB::rocksdb
     nlohmann_json::nlohmann_json
     pthread
 )
@@ -118,6 +137,5 @@ message(STATUS "")
 message(STATUS "Dependencies:")
 message(STATUS "  nlohmann_json: ${nlohmann_json_FOUND}")
 message(STATUS "  librdkafka: ${RDKAFKA_LIB}")
-message(STATUS "")
-message(STATUS "Note: RocksDB will be added in US-105")
+message(STATUS "  RocksDB: ${RocksDB_FOUND}")
 message(STATUS "")

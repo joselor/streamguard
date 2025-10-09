@@ -4,18 +4,20 @@
 #include <thread>
 #include <chrono>
 #include "kafka_consumer.h"
+#include "event_store.h"
 #include "event.h"
 
 /**
  * StreamGuard Stream Processor - Main Entry Point
  *
  * This application consumes security events from Kafka, processes them in real-time,
- * and will store them in RocksDB (US-105) for time-series analysis.
+ * and stores them in RocksDB for time-series analysis.
  *
  * Command-line arguments:
  *   --broker <address>  Kafka bootstrap servers (default: localhost:9092)
  *   --topic <name>      Kafka topic to consume (default: security-events)
  *   --group <id>        Consumer group ID (default: streamguard-processor)
+ *   --db <path>         RocksDB database path (default: ./data/events.db)
  *
  * @author Jose Ortuno
  * @version 1.0
@@ -49,6 +51,7 @@ void printUsage(const char* progName) {
     std::cout << "  --broker <address>  Kafka bootstrap servers (default: localhost:9092)" << std::endl;
     std::cout << "  --topic <name>      Kafka topic to consume (default: security-events)" << std::endl;
     std::cout << "  --group <id>        Consumer group ID (default: streamguard-processor)" << std::endl;
+    std::cout << "  --db <path>         RocksDB database path (default: ./data/events.db)" << std::endl;
     std::cout << "  --help, -h          Show this help message" << std::endl;
     std::cout << std::endl;
     std::cout << "Examples:" << std::endl;
@@ -67,6 +70,7 @@ struct Config {
     std::string broker = "localhost:9092";
     std::string topic = "security-events";
     std::string groupId = "streamguard-processor";
+    std::string dbPath = "./data/events.db";
 };
 
 Config parseArgs(int argc, char* argv[]) {
@@ -81,6 +85,8 @@ Config parseArgs(int argc, char* argv[]) {
             config.topic = argv[++i];
         } else if (arg == "--group" && i + 1 < argc) {
             config.groupId = argv[++i];
+        } else if (arg == "--db" && i + 1 < argc) {
+            config.dbPath = argv[++i];
         } else if (arg == "--help" || arg == "-h") {
             printUsage(argv[0]);
             exit(0);
@@ -105,6 +111,9 @@ int main(int argc, char* argv[]) {
     Config config = parseArgs(argc, argv);
 
     try {
+        // Create EventStore for persistence
+        streamguard::EventStore store(config.dbPath);
+
         // Create Kafka consumer
         streamguard::KafkaConsumer consumer(
             config.broker,
@@ -116,23 +125,26 @@ int main(int argc, char* argv[]) {
         std::signal(SIGINT, signalHandler);
         std::signal(SIGTERM, signalHandler);
 
-        // Set event processing callback with shutdown check
-        consumer.setEventCallback([&consumer](const streamguard::Event& event) {
+        // Set event processing callback with shutdown check and persistence
+        consumer.setEventCallback([&consumer, &store](const streamguard::Event& event) {
             // Check for shutdown signal
             if (shutdownRequested.load()) {
                 consumer.shutdown();
                 return;
             }
 
-            // For now, just log the event
-            // In US-105, we'll store it in RocksDB
-            std::cout << "[Processor] Received event: "
-                      << "id=" << event.event_id
-                      << ", type=" << streamguard::eventTypeToString(event.event_type)
-                      << ", user=" << event.user
-                      << ", source=" << event.source_ip
-                      << ", threat=" << event.threat_score
-                      << std::endl;
+            // Store event in RocksDB
+            if (store.put(event)) {
+                std::cout << "[Processor] Stored event: "
+                          << "id=" << event.event_id
+                          << ", type=" << streamguard::eventTypeToString(event.event_type)
+                          << ", user=" << event.user
+                          << ", source=" << event.source_ip
+                          << ", threat=" << event.threat_score
+                          << std::endl;
+            } else {
+                std::cerr << "[Processor] Failed to store event: " << event.event_id << std::endl;
+            }
         });
 
         // Start consuming
