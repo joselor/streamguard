@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * @author Jose Ortuno
  * @version 1.0
+ * -- just fixing commit msg
  */
 class EventSerializationTest {
 
