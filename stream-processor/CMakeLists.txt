@@ -16,6 +16,7 @@ set(CMAKE_PREFIX_PATH "/opt/homebrew")
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     /opt/homebrew/include
+    ${RDKAFKA_INCLUDE_DIR}
 )
 
 # Link directories
@@ -23,6 +24,10 @@ link_directories(/opt/homebrew/lib)
 
 # Find nlohmann_json (required for event.cpp)
 find_package(nlohmann_json 3.2.0 REQUIRED)
+
+# Find librdkafka (required for Kafka consumer)
+find_library(RDKAFKA_LIB rdkafka++ REQUIRED)
+find_path(RDKAFKA_INCLUDE_DIR librdkafka/rdkafkacpp.h REQUIRED)
 
 # Optional: Google Test for unit testing
 find_package(GTest QUIET)
@@ -37,10 +42,37 @@ set(EVENT_SOURCES
     src/event.cpp
 )
 
+set(CONSUMER_SOURCES
+    src/kafka_consumer.cpp
+)
+
 # Create library from event.cpp
 add_library(streamguard_event STATIC ${EVENT_SOURCES})
 
 target_link_libraries(streamguard_event
+    nlohmann_json::nlohmann_json
+    pthread
+)
+
+# Create library from kafka_consumer.cpp
+add_library(streamguard_consumer STATIC ${CONSUMER_SOURCES})
+
+target_link_libraries(streamguard_consumer
+    streamguard_event
+    ${RDKAFKA_LIB}
+    nlohmann_json::nlohmann_json
+    pthread
+)
+
+# Create stream processor executable
+add_executable(stream-processor
+    src/main.cpp
+)
+
+target_link_libraries(stream-processor
+    streamguard_consumer
+    streamguard_event
+    ${RDKAFKA_LIB}
     nlohmann_json::nlohmann_json
     pthread
 )
@@ -85,6 +117,7 @@ message(STATUS "  Compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSIO
 message(STATUS "")
 message(STATUS "Dependencies:")
 message(STATUS "  nlohmann_json: ${nlohmann_json_FOUND}")
+message(STATUS "  librdkafka: ${RDKAFKA_LIB}")
 message(STATUS "")
-message(STATUS "Note: RocksDB and Kafka will be added in future user stories")
+message(STATUS "Note: RocksDB will be added in US-105")
 message(STATUS "")

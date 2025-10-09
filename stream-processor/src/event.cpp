@@ -106,14 +106,27 @@ void to_json(nlohmann::json& j, const EventMetadata& meta) {
 }
 
 void from_json(const nlohmann::json& j, EventMetadata& meta) {
-    if (j.contains("user_agent")) j.at("user_agent").get_to(meta.user_agent);
-    if (j.contains("geo_location")) j.at("geo_location").get_to(meta.geo_location);
-    if (j.contains("port")) j.at("port").get_to(meta.port);
-    if (j.contains("protocol")) j.at("protocol").get_to(meta.protocol);
-    if (j.contains("file_path")) j.at("file_path").get_to(meta.file_path);
-    if (j.contains("process_name")) j.at("process_name").get_to(meta.process_name);
-    if (j.contains("domain")) j.at("domain").get_to(meta.domain);
-    if (j.contains("bytes_transferred")) j.at("bytes_transferred").get_to(meta.bytes_transferred);
+    // Helper lambda to safely get string values (handle null)
+    auto get_string_or_empty = [](const nlohmann::json& json_obj, const std::string& key) -> std::string {
+        if (json_obj.contains(key) && !json_obj.at(key).is_null()) {
+            return json_obj.at(key).get<std::string>();
+        }
+        return "";
+    };
+
+    meta.user_agent = get_string_or_empty(j, "user_agent");
+    meta.geo_location = get_string_or_empty(j, "geo_location");
+    meta.protocol = get_string_or_empty(j, "protocol");
+    meta.file_path = get_string_or_empty(j, "file_path");
+    meta.process_name = get_string_or_empty(j, "process_name");
+    meta.domain = get_string_or_empty(j, "domain");
+
+    if (j.contains("port") && !j.at("port").is_null()) {
+        j.at("port").get_to(meta.port);
+    }
+    if (j.contains("bytes_transferred") && !j.at("bytes_transferred").is_null()) {
+        j.at("bytes_transferred").get_to(meta.bytes_transferred);
+    }
 }
 
 // JSON serialization for Event
@@ -149,13 +162,19 @@ void from_json(const nlohmann::json& j, Event& event) {
     
     j.at("source_ip").get_to(event.source_ip);
     j.at("user").get_to(event.user);
-    
-    std::string status_str = j.at("status").get<std::string>();
-    event.status = stringToEventStatus(status_str);
-    
+
+    // Status field - handle null values
+    if (j.contains("status") && !j.at("status").is_null()) {
+        std::string status_str = j.at("status").get<std::string>();
+        event.status = stringToEventStatus(status_str);
+    } else {
+        event.status = EventStatus::SUCCESS;
+    }
+
     j.at("threat_score").get_to(event.threat_score);
-    
-    if (j.contains("destination_ip")) {
+
+    // destination_ip is optional and may be null
+    if (j.contains("destination_ip") && !j.at("destination_ip").is_null()) {
         j.at("destination_ip").get_to(event.destination_ip);
     }
     
