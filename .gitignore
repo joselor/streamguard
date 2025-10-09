@@ -42,3 +42,4 @@ secrets/
 *.log
 logs/
 
+test-data/
