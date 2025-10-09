@@ -45,6 +45,9 @@ public abstract class Event {
     @JsonProperty("threat_score")
     private double threatScore;
 
+    @JsonProperty("status")
+    private String status = "success";
+
     @JsonProperty("metadata")
     private EventMetadata metadata;
 
@@ -53,6 +56,7 @@ public abstract class Event {
         this.eventId = generateEventId();
         this.timestamp = System.currentTimeMillis();
         this.metadata = new EventMetadata();
+        this.status = "success";
     }
 
     public Event(String eventType, String sourceIp, String destinationIp,
@@ -125,6 +129,14 @@ public abstract class Event {
 
     public void setThreatScore(double threatScore) {
         this.threatScore = Math.max(0.0, Math.min(1.0, threatScore));
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
     }
 
     public EventMetadata getMetadata() {

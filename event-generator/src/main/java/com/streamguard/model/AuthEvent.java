@@ -85,6 +85,7 @@ public class AuthEvent extends Event {
         this.authDetails = new AuthDetails();
         this.authDetails.setAuthType(authType);
         this.authDetails.setStatus(status);
+        this.setStatus(status);  // Set root-level status for C++ compatibility
     }
 
     public AuthDetails getAuthDetails() {
