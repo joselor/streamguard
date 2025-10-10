@@ -49,4 +49,24 @@ public class EventController {
         long count = queryService.getEventCount();
         return ResponseEntity.ok(count);
     }
+
+    @GetMapping("/recent")
+    @Operation(summary = "Get recent security events", description = "Returns the most recent security events (alias for GET /api/events)")
+    public ResponseEntity<List<SecurityEvent>> getRecentEvents(
+            @Parameter(description = "Maximum number of events to return", example = "100")
+            @RequestParam(defaultValue = "100") int limit) {
+        List<SecurityEvent> events = queryService.getLatestEvents(limit);
+        return ResponseEntity.ok(events);
+    }
+
+    @GetMapping("/threats")
+    @Operation(summary = "Get high-threat events", description = "Returns events with threat score above the specified minimum")
+    public ResponseEntity<List<SecurityEvent>> getThreatEvents(
+            @Parameter(description = "Minimum threat score (0.0-1.0)", example = "0.7")
+            @RequestParam(name = "min_score", defaultValue = "0.7") double minScore,
+            @Parameter(description = "Maximum number of events to return", example = "100")
+            @RequestParam(defaultValue = "100") int limit) {
+        List<SecurityEvent> events = queryService.getEventsByThreatScore(minScore, limit);
+        return ResponseEntity.ok(events);
+    }
 }

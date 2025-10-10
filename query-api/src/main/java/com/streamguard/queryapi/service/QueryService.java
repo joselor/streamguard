@@ -196,4 +196,82 @@ public class QueryService {
         }
         return count;
     }
+
+    /**
+     * Get events with threat score above threshold
+     */
+    public List<SecurityEvent> getEventsByThreatScore(double minScore, int limit) {
+        List<SecurityEvent> events = new ArrayList<>();
+
+        try (RocksIterator iterator = rocksDB.newIterator(defaultColumnFamily)) {
+            iterator.seekToLast();
+
+            while (iterator.isValid() && events.size() < limit) {
+                try {
+                    String json = new String(iterator.value());
+                    SecurityEvent event = objectMapper.readValue(json, SecurityEvent.class);
+
+                    if (event.getThreatScore() != null && event.getThreatScore() >= minScore) {
+                        events.add(event);
+                    }
+                } catch (Exception e) {
+                    log.error("Error parsing event JSON", e);
+                }
+                iterator.prev();
+            }
+        }
+
+        return events;
+    }
+
+    /**
+     * Get summary statistics
+     */
+    public StatsSummary getStatsSummary() {
+        StatsSummary summary = new StatsSummary();
+
+        long totalEvents = 0;
+        long highThreatEvents = 0;
+        double totalThreatScore = 0.0;
+
+        try (RocksIterator iterator = rocksDB.newIterator(defaultColumnFamily)) {
+            iterator.seekToFirst();
+
+            while (iterator.isValid()) {
+                try {
+                    String json = new String(iterator.value());
+                    SecurityEvent event = objectMapper.readValue(json, SecurityEvent.class);
+
+                    totalEvents++;
+                    if (event.getThreatScore() != null) {
+                        totalThreatScore += event.getThreatScore();
+                        if (event.getThreatScore() >= 0.7) {
+                            highThreatEvents++;
+                        }
+                    }
+                } catch (Exception e) {
+                    log.error("Error parsing event JSON", e);
+                }
+                iterator.next();
+            }
+        }
+
+        summary.setTotalEvents(totalEvents);
+        summary.setHighThreatEvents(highThreatEvents);
+        summary.setAverageThreatScore(totalEvents > 0 ? totalThreatScore / totalEvents : 0.0);
+        summary.setTotalAnalyses(getAnalysisCount());
+
+        return summary;
+    }
+
+    /**
+     * Statistics summary model
+     */
+    @lombok.Data
+    public static class StatsSummary {
+        private long totalEvents;
+        private long highThreatEvents;
+        private double averageThreatScore;
+        private long totalAnalyses;
+    }
 }

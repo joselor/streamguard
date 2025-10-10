@@ -31,8 +31,20 @@ public class AnalysisController {
         return ResponseEntity.ok(analyses);
     }
 
-    @GetMapping("/event/{eventId}")
+    @GetMapping("/{id}")
     @Operation(summary = "Get analysis by event ID", description = "Returns the AI threat analysis for a specific event")
+    public ResponseEntity<ThreatAnalysis> getAnalysisById(
+            @Parameter(description = "Event ID", example = "evt_1696723200_001")
+            @PathVariable String id) {
+        ThreatAnalysis analysis = queryService.getAnalysisByEventId(id);
+        if (analysis != null) {
+            return ResponseEntity.ok(analysis);
+        }
+        return ResponseEntity.notFound().build();
+    }
+
+    @GetMapping("/event/{eventId}")
+    @Operation(summary = "Get analysis by event ID (alias)", description = "Returns the AI threat analysis for a specific event")
     public ResponseEntity<ThreatAnalysis> getAnalysisByEventId(
             @Parameter(description = "Event ID", example = "evt_1696723200_001")
             @PathVariable String eventId) {
