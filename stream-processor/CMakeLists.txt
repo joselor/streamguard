@@ -35,6 +35,9 @@ find_package(RocksDB REQUIRED)
 # Find prometheus-cpp (required for metrics)
 find_package(prometheus-cpp CONFIG REQUIRED)
 
+# Find CURL (required for AI analyzer)
+find_package(CURL REQUIRED)
+
 # Optional: Google Test for unit testing
 find_package(GTest QUIET)
 
@@ -58,6 +61,10 @@ set(STORE_SOURCES
 
 set(METRICS_SOURCES
     src/metrics.cpp
+)
+
+set(AI_SOURCES
+    src/ai_analyzer.cpp
 )
 
 # Create library from event.cpp
@@ -97,6 +104,16 @@ target_link_libraries(streamguard_metrics
     pthread
 )
 
+# Create library from ai_analyzer.cpp
+add_library(streamguard_ai STATIC ${AI_SOURCES})
+
+target_link_libraries(streamguard_ai
+    streamguard_event
+    CURL::libcurl
+    nlohmann_json::nlohmann_json
+    pthread
+)
+
 # Create stream processor executable
 add_executable(stream-processor
     src/main.cpp
@@ -106,11 +123,13 @@ target_link_libraries(stream-processor
     streamguard_consumer
     streamguard_store
     streamguard_metrics
+    streamguard_ai
     streamguard_event
     ${RDKAFKA_LIB}
     RocksDB::rocksdb
     prometheus-cpp::core
     prometheus-cpp::pull
+    CURL::libcurl
     nlohmann_json::nlohmann_json
     pthread
 )

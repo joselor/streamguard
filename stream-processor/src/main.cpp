@@ -7,6 +7,7 @@
 #include "event_store.h"
 #include "event.h"
 #include "metrics.h"
+#include "ai_analyzer.h"
 
 /**
  * StreamGuard Stream Processor - Main Entry Point
@@ -54,6 +55,7 @@ void printUsage(const char* progName) {
     std::cout << "  --group <id>            Consumer group ID (default: streamguard-processor)" << std::endl;
     std::cout << "  --db <path>             RocksDB database path (default: ./data/events.db)" << std::endl;
     std::cout << "  --metrics-port <port>   Prometheus metrics port (default: 8080)" << std::endl;
+    std::cout << "  --openai-key <key>      OpenAI API key for AI threat analysis (optional)" << std::endl;
     std::cout << "  --help, -h              Show this help message" << std::endl;
     std::cout << std::endl;
     std::cout << "Examples:" << std::endl;
@@ -74,6 +76,7 @@ struct Config {
     std::string groupId = "streamguard-processor";
     std::string dbPath = "./data/events.db";
     int metricsPort = 8080;
+    std::string openaiKey = "";  // Optional: empty means AI disabled
 };
 
 Config parseArgs(int argc, char* argv[]) {
@@ -92,6 +95,8 @@ Config parseArgs(int argc, char* argv[]) {
             config.dbPath = argv[++i];
         } else if (arg == "--metrics-port" && i + 1 < argc) {
             config.metricsPort = std::stoi(argv[++i]);
+        } else if (arg == "--openai-key" && i + 1 < argc) {
+            config.openaiKey = argv[++i];
         } else if (arg == "--help" || arg == "-h") {
             printUsage(argv[0]);
             exit(0);
@@ -122,6 +127,14 @@ int main(int argc, char* argv[]) {
         // Create EventStore for persistence
         streamguard::EventStore store(config.dbPath);
 
+        // Create AI Analyzer (optional - only if API key provided)
+        streamguard::AIAnalyzer aiAnalyzer(config.openaiKey);
+        if (aiAnalyzer.isEnabled()) {
+            std::cout << "[Main] AI threat analysis enabled (OpenAI GPT-4o-mini)" << std::endl;
+        } else {
+            std::cout << "[Main] AI threat analysis disabled (no API key provided)" << std::endl;
+        }
+
         // Create Kafka consumer
         streamguard::KafkaConsumer consumer(
             config.broker,
@@ -133,8 +146,8 @@ int main(int argc, char* argv[]) {
         std::signal(SIGINT, signalHandler);
         std::signal(SIGTERM, signalHandler);
 
-        // Set event processing callback with shutdown check, persistence, and metrics
-        consumer.setEventCallback([&consumer, &store, &metrics](const streamguard::Event& event) {
+        // Set event processing callback with shutdown check, persistence, metrics, and AI analysis
+        consumer.setEventCallback([&consumer, &store, &metrics, &aiAnalyzer](const streamguard::Event& event) {
             // Check for shutdown signal
             if (shutdownRequested.load()) {
                 consumer.shutdown();
@@ -159,6 +172,22 @@ int main(int argc, char* argv[]) {
                     std::string severity = event.threat_score > 0.9 ? "critical" :
                                          event.threat_score > 0.8 ? "high" : "medium";
                     metrics.incrementThreatsDetected(severity);
+
+                    // Perform AI threat analysis for high-risk events
+                    if (aiAnalyzer.isEnabled()) {
+                        auto analysis = aiAnalyzer.analyze(event);
+                        if (analysis) {
+                            std::cout << "[AI Analysis] Event " << event.event_id << std::endl;
+                            std::cout << "  Attack Type: " << analysis->attack_type << std::endl;
+                            std::cout << "  Severity: " << analysis->severity << std::endl;
+                            std::cout << "  Description: " << analysis->description << std::endl;
+                            std::cout << "  Confidence: " << analysis->confidence << std::endl;
+                            std::cout << "  Recommendations:" << std::endl;
+                            for (const auto& rec : analysis->recommendations) {
+                                std::cout << "    - " << rec << std::endl;
+                            }
+                        }
+                    }
                 }
 
                 std::cout << "[Processor] Stored event: "
