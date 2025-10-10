@@ -77,7 +77,7 @@ public class RocksDBConfig {
         return columnFamilyHandles.get(0); // default CF
     }
 
-    @Bean
+    @Bean(name = "aiAnalysisColumnFamily")
     public ColumnFamilyHandle aiAnalysisColumnFamily() {
         // Find ai_analysis column family
         for (int i = 0; i < columnFamilyHandles.size(); i++) {
@@ -91,7 +91,8 @@ public class RocksDBConfig {
                 log.error("Error reading column family name", e);
             }
         }
-        log.warn("ai_analysis column family not found, returning null");
+        log.warn("ai_analysis column family not found, this is expected for databases created before US-214");
+        // Return a dummy handle that will be checked for null in QueryService
         return null;
     }
 

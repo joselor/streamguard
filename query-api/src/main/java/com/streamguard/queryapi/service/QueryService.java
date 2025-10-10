@@ -3,12 +3,14 @@ package com.streamguard.queryapi.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.streamguard.queryapi.model.SecurityEvent;
 import com.streamguard.queryapi.model.ThreatAnalysis;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -21,13 +23,22 @@ import java.util.List;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class QueryService {
 
     private final RocksDB rocksDB;
     private final ColumnFamilyHandle defaultColumnFamily;
     private final ColumnFamilyHandle aiAnalysisColumnFamily;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Autowired
+    public QueryService(
+            RocksDB rocksDB,
+            ColumnFamilyHandle defaultColumnFamily,
+            @Nullable @Qualifier("aiAnalysisColumnFamily") ColumnFamilyHandle aiAnalysisColumnFamily) {
+        this.rocksDB = rocksDB;
+        this.defaultColumnFamily = defaultColumnFamily;
+        this.aiAnalysisColumnFamily = aiAnalysisColumnFamily;
+    }
 
     /**
      * Get latest events (up to limit)

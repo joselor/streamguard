@@ -67,6 +67,12 @@
             <version>2.3.0</version>
         </dependency>
 
+        <!-- HTTP Client for OpenAI API -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
+        </dependency>
+
         <!-- Test dependencies -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

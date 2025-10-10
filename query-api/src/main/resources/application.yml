@@ -10,6 +10,12 @@ rocksdb:
   path: ${ROCKSDB_PATH:../stream-processor/build/data/events.db}
   read-only: true
 
+# OpenAI Configuration
+openai:
+  api:
+    key: ${OPENAI_API_KEY:}
+    model: gpt-4o-mini
+
 # Actuator endpoints
 management:
   endpoints:
