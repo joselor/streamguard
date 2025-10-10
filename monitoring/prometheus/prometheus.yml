@@ -20,14 +20,14 @@ scrape_configs:
   # Stream Processor metrics (C++ application)
   - job_name: 'stream-processor'
     static_configs:
-      - targets: ['host.docker.internal:8081']
+      - targets: ['host.docker.internal:8080']
     metrics_path: '/metrics'
-    scrape_interval: 10s
+    scrape_interval: 5s  # More frequent for demo purposes
 
   # Query API metrics (Spring Boot application)
   - job_name: 'query-api'
     static_configs:
-      - targets: ['host.docker.internal:8080']
+      - targets: ['host.docker.internal:8082']
     metrics_path: '/actuator/prometheus'
     scrape_interval: 10s
 

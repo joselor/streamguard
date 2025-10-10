@@ -6,6 +6,7 @@
 #include "kafka_consumer.h"
 #include "event_store.h"
 #include "event.h"
+#include "metrics.h"
 
 /**
  * StreamGuard Stream Processor - Main Entry Point
@@ -48,11 +49,12 @@ void printUsage(const char* progName) {
     std::cout << "Usage: " << progName << " [OPTIONS]" << std::endl;
     std::cout << std::endl;
     std::cout << "Options:" << std::endl;
-    std::cout << "  --broker <address>  Kafka bootstrap servers (default: localhost:9092)" << std::endl;
-    std::cout << "  --topic <name>      Kafka topic to consume (default: security-events)" << std::endl;
-    std::cout << "  --group <id>        Consumer group ID (default: streamguard-processor)" << std::endl;
-    std::cout << "  --db <path>         RocksDB database path (default: ./data/events.db)" << std::endl;
-    std::cout << "  --help, -h          Show this help message" << std::endl;
+    std::cout << "  --broker <address>      Kafka bootstrap servers (default: localhost:9092)" << std::endl;
+    std::cout << "  --topic <name>          Kafka topic to consume (default: security-events)" << std::endl;
+    std::cout << "  --group <id>            Consumer group ID (default: streamguard-processor)" << std::endl;
+    std::cout << "  --db <path>             RocksDB database path (default: ./data/events.db)" << std::endl;
+    std::cout << "  --metrics-port <port>   Prometheus metrics port (default: 8080)" << std::endl;
+    std::cout << "  --help, -h              Show this help message" << std::endl;
     std::cout << std::endl;
     std::cout << "Examples:" << std::endl;
     std::cout << "  # Use default settings" << std::endl;
@@ -71,6 +73,7 @@ struct Config {
     std::string topic = "security-events";
     std::string groupId = "streamguard-processor";
     std::string dbPath = "./data/events.db";
+    int metricsPort = 8080;
 };
 
 Config parseArgs(int argc, char* argv[]) {
@@ -87,6 +90,8 @@ Config parseArgs(int argc, char* argv[]) {
             config.groupId = argv[++i];
         } else if (arg == "--db" && i + 1 < argc) {
             config.dbPath = argv[++i];
+        } else if (arg == "--metrics-port" && i + 1 < argc) {
+            config.metricsPort = std::stoi(argv[++i]);
         } else if (arg == "--help" || arg == "-h") {
             printUsage(argv[0]);
             exit(0);
@@ -111,6 +116,9 @@ int main(int argc, char* argv[]) {
     Config config = parseArgs(argc, argv);
 
     try {
+        // Create Metrics collector
+        streamguard::Metrics metrics(config.metricsPort);
+
         // Create EventStore for persistence
         streamguard::EventStore store(config.dbPath);
 
@@ -125,16 +133,34 @@ int main(int argc, char* argv[]) {
         std::signal(SIGINT, signalHandler);
         std::signal(SIGTERM, signalHandler);
 
-        // Set event processing callback with shutdown check and persistence
-        consumer.setEventCallback([&consumer, &store](const streamguard::Event& event) {
+        // Set event processing callback with shutdown check, persistence, and metrics
+        consumer.setEventCallback([&consumer, &store, &metrics](const streamguard::Event& event) {
             // Check for shutdown signal
             if (shutdownRequested.load()) {
                 consumer.shutdown();
                 return;
             }
 
+            // Record start time for latency measurement
+            auto start = std::chrono::high_resolution_clock::now();
+
             // Store event in RocksDB
             if (store.put(event)) {
+                // Calculate processing latency
+                auto end = std::chrono::high_resolution_clock::now();
+                std::chrono::duration<double> latency = end - start;
+
+                // Record metrics
+                metrics.incrementEventsProcessed(streamguard::eventTypeToString(event.event_type));
+                metrics.recordProcessingLatency(latency.count());
+
+                // Check threat score and record if it's a threat
+                if (event.threat_score > 0.7) {
+                    std::string severity = event.threat_score > 0.9 ? "critical" :
+                                         event.threat_score > 0.8 ? "high" : "medium";
+                    metrics.incrementThreatsDetected(severity);
+                }
+
                 std::cout << "[Processor] Stored event: "
                           << "id=" << event.event_id
                           << ", type=" << streamguard::eventTypeToString(event.event_type)
@@ -144,6 +170,7 @@ int main(int argc, char* argv[]) {
                           << std::endl;
             } else {
                 std::cerr << "[Processor] Failed to store event: " << event.event_id << std::endl;
+                metrics.incrementStorageErrors();
             }
         });
 

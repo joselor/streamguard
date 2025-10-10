@@ -32,6 +32,9 @@ find_path(RDKAFKA_INCLUDE_DIR librdkafka/rdkafkacpp.h REQUIRED)
 # Find RocksDB (required for event storage)
 find_package(RocksDB REQUIRED)
 
+# Find prometheus-cpp (required for metrics)
+find_package(prometheus-cpp CONFIG REQUIRED)
+
 # Optional: Google Test for unit testing
 find_package(GTest QUIET)
 
@@ -51,6 +54,10 @@ set(CONSUMER_SOURCES
 
 set(STORE_SOURCES
     src/event_store.cpp
+)
+
+set(METRICS_SOURCES
+    src/metrics.cpp
 )
 
 # Create library from event.cpp
@@ -81,6 +88,15 @@ target_link_libraries(streamguard_consumer
     pthread
 )
 
+# Create library from metrics.cpp
+add_library(streamguard_metrics STATIC ${METRICS_SOURCES})
+
+target_link_libraries(streamguard_metrics
+    prometheus-cpp::core
+    prometheus-cpp::pull
+    pthread
+)
+
 # Create stream processor executable
 add_executable(stream-processor
     src/main.cpp
@@ -89,9 +105,12 @@ add_executable(stream-processor
 target_link_libraries(stream-processor
     streamguard_consumer
     streamguard_store
+    streamguard_metrics
     streamguard_event
     ${RDKAFKA_LIB}
     RocksDB::rocksdb
+    prometheus-cpp::core
+    prometheus-cpp::pull
     nlohmann_json::nlohmann_json
     pthread
 )
