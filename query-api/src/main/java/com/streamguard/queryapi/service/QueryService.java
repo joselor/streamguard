@@ -1,6 +1,7 @@
 package com.streamguard.queryapi.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.streamguard.queryapi.model.AnomalyResult;
 import com.streamguard.queryapi.model.SecurityEvent;
 import com.streamguard.queryapi.model.ThreatAnalysis;
 import lombok.extern.slf4j.Slf4j;
@@ -28,16 +29,19 @@ public class QueryService {
     private final RocksDB rocksDB;
     private final ColumnFamilyHandle defaultColumnFamily;
     private final ColumnFamilyHandle aiAnalysisColumnFamily;
+    private final ColumnFamilyHandle anomaliesColumnFamily;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Autowired
     public QueryService(
             RocksDB rocksDB,
             ColumnFamilyHandle defaultColumnFamily,
-            @Nullable @Qualifier("aiAnalysisColumnFamily") ColumnFamilyHandle aiAnalysisColumnFamily) {
+            @Nullable @Qualifier("aiAnalysisColumnFamily") ColumnFamilyHandle aiAnalysisColumnFamily,
+            @Nullable @Qualifier("anomaliesColumnFamily") ColumnFamilyHandle anomaliesColumnFamily) {
         this.rocksDB = rocksDB;
         this.defaultColumnFamily = defaultColumnFamily;
         this.aiAnalysisColumnFamily = aiAnalysisColumnFamily;
+        this.anomaliesColumnFamily = anomaliesColumnFamily;
     }
 
     /**
@@ -273,6 +277,181 @@ public class QueryService {
         summary.setTotalAnalyses(getAnalysisCount());
 
         return summary;
+    }
+
+    /**
+     * Get latest anomalies (up to limit)
+     */
+    public List<AnomalyResult> getLatestAnomalies(int limit) {
+        List<AnomalyResult> anomalies = new ArrayList<>();
+
+        if (anomaliesColumnFamily == null) {
+            log.warn("anomalies column family not available");
+            return anomalies;
+        }
+
+        try (RocksIterator iterator = rocksDB.newIterator(anomaliesColumnFamily)) {
+            iterator.seekToLast();
+
+            int count = 0;
+            while (iterator.isValid() && count < limit) {
+                try {
+                    String json = new String(iterator.value());
+                    AnomalyResult anomaly = objectMapper.readValue(json, AnomalyResult.class);
+                    anomalies.add(anomaly);
+                    count++;
+                } catch (Exception e) {
+                    log.error("Error parsing anomaly JSON", e);
+                }
+                iterator.prev();
+            }
+        }
+
+        return anomalies;
+    }
+
+    /**
+     * Get anomaly by event ID
+     */
+    public AnomalyResult getAnomalyByEventId(String eventId) {
+        if (anomaliesColumnFamily == null) {
+            log.warn("anomalies column family not available");
+            return null;
+        }
+
+        try (RocksIterator iterator = rocksDB.newIterator(anomaliesColumnFamily)) {
+            iterator.seekToFirst();
+
+            while (iterator.isValid()) {
+                String key = new String(iterator.key());
+                if (key.endsWith(":" + eventId)) {
+                    String json = new String(iterator.value());
+                    return objectMapper.readValue(json, AnomalyResult.class);
+                }
+                iterator.next();
+            }
+        } catch (Exception e) {
+            log.error("Error getting anomaly by event ID: {}", eventId, e);
+        }
+
+        return null;
+    }
+
+    /**
+     * Get anomalies by user
+     */
+    public List<AnomalyResult> getAnomaliesByUser(String user, int limit) {
+        List<AnomalyResult> anomalies = new ArrayList<>();
+
+        if (anomaliesColumnFamily == null) {
+            log.warn("anomalies column family not available");
+            return anomalies;
+        }
+
+        try (RocksIterator iterator = rocksDB.newIterator(anomaliesColumnFamily)) {
+            iterator.seekToFirst();
+
+            while (iterator.isValid() && anomalies.size() < limit) {
+                try {
+                    String json = new String(iterator.value());
+                    AnomalyResult anomaly = objectMapper.readValue(json, AnomalyResult.class);
+
+                    if (user.equals(anomaly.getUser())) {
+                        anomalies.add(anomaly);
+                    }
+                } catch (Exception e) {
+                    log.error("Error parsing anomaly JSON", e);
+                }
+                iterator.next();
+            }
+        }
+
+        return anomalies;
+    }
+
+    /**
+     * Get high-score anomalies (above threshold)
+     */
+    public List<AnomalyResult> getHighScoreAnomalies(double threshold, int limit) {
+        List<AnomalyResult> anomalies = new ArrayList<>();
+
+        if (anomaliesColumnFamily == null) {
+            log.warn("anomalies column family not available");
+            return anomalies;
+        }
+
+        try (RocksIterator iterator = rocksDB.newIterator(anomaliesColumnFamily)) {
+            iterator.seekToLast();
+
+            while (iterator.isValid() && anomalies.size() < limit) {
+                try {
+                    String json = new String(iterator.value());
+                    AnomalyResult anomaly = objectMapper.readValue(json, AnomalyResult.class);
+
+                    if (anomaly.getAnomalyScore() != null && anomaly.getAnomalyScore() >= threshold) {
+                        anomalies.add(anomaly);
+                    }
+                } catch (Exception e) {
+                    log.error("Error parsing anomaly JSON", e);
+                }
+                iterator.prev();
+            }
+        }
+
+        return anomalies;
+    }
+
+    /**
+     * Get anomalies by time range
+     */
+    public List<AnomalyResult> getAnomaliesByTimeRange(long startTime, long endTime, int limit) {
+        List<AnomalyResult> anomalies = new ArrayList<>();
+
+        if (anomaliesColumnFamily == null) {
+            log.warn("anomalies column family not available");
+            return anomalies;
+        }
+
+        try (RocksIterator iterator = rocksDB.newIterator(anomaliesColumnFamily)) {
+            iterator.seekToFirst();
+
+            while (iterator.isValid() && anomalies.size() < limit) {
+                try {
+                    String json = new String(iterator.value());
+                    AnomalyResult anomaly = objectMapper.readValue(json, AnomalyResult.class);
+
+                    if (anomaly.getTimestamp() != null
+                            && anomaly.getTimestamp() >= startTime
+                            && anomaly.getTimestamp() <= endTime) {
+                        anomalies.add(anomaly);
+                    }
+                } catch (Exception e) {
+                    log.error("Error parsing anomaly JSON", e);
+                }
+                iterator.next();
+            }
+        }
+
+        return anomalies;
+    }
+
+    /**
+     * Get total anomaly count
+     */
+    public long getAnomalyCount() {
+        if (anomaliesColumnFamily == null) {
+            return 0;
+        }
+
+        long count = 0;
+        try (RocksIterator iterator = rocksDB.newIterator(anomaliesColumnFamily)) {
+            iterator.seekToFirst();
+            while (iterator.isValid()) {
+                count++;
+                iterator.next();
+            }
+        }
+        return count;
     }
 
     /**

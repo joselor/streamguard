@@ -1,4 +1,5 @@
 #include "event_store.h"
+#include "anomaly_detector.h"
 #include <rocksdb/options.h>
 #include <rocksdb/slice.h>
 #include <rocksdb/table.h>
@@ -12,7 +13,7 @@
 
 namespace streamguard {
 
-EventStore::EventStore(const std::string& dbPath) : dbPath_(dbPath), ai_analysis_cf_(nullptr), embeddings_cf_(nullptr) {
+EventStore::EventStore(const std::string& dbPath) : dbPath_(dbPath), ai_analysis_cf_(nullptr), embeddings_cf_(nullptr), anomalies_cf_(nullptr) {
     rocksdb::Options options;
 
     // Create database if it doesn't exist
@@ -39,6 +40,8 @@ EventStore::EventStore(const std::string& dbPath) : dbPath_(dbPath), ai_analysis
         "ai_analysis", rocksdb::ColumnFamilyOptions(options)));
     column_families.push_back(rocksdb::ColumnFamilyDescriptor(
         "embeddings", rocksdb::ColumnFamilyOptions(options)));
+    column_families.push_back(rocksdb::ColumnFamilyDescriptor(
+        "anomalies", rocksdb::ColumnFamilyOptions(options)));
 
     // Open database with column families
     std::vector<rocksdb::ColumnFamilyHandle*> handles;
@@ -52,12 +55,13 @@ EventStore::EventStore(const std::string& dbPath) : dbPath_(dbPath), ai_analysis
     db_.reset(db_ptr);
     ai_analysis_cf_ = handles[1];  // ai_analysis column family
     embeddings_cf_ = handles[2];   // embeddings column family
+    anomalies_cf_ = handles[3];    // anomalies column family
 
     // Note: handles[0] is default column family (events), owned by db_
-    // We store handle[1] for ai_analysis queries, handle[2] for embeddings
+    // We store handles for column families we query separately
 
     std::cout << "[EventStore] Database opened at: " << dbPath << std::endl;
-    std::cout << "[EventStore] Column families: default (events), ai_analysis, embeddings" << std::endl;
+    std::cout << "[EventStore] Column families: default (events), ai_analysis, embeddings, anomalies" << std::endl;
 }
 
 EventStore::~EventStore() {
@@ -73,6 +77,10 @@ EventStore::~EventStore() {
             delete embeddings_cf_;
             embeddings_cf_ = nullptr;
         }
+        if (anomalies_cf_) {
+            delete anomalies_cf_;
+            anomalies_cf_ = nullptr;
+        }
 
         db_.reset();  // Unique_ptr will call delete and close the DB
     }
@@ -82,9 +90,11 @@ EventStore::EventStore(EventStore&& other) noexcept
     : db_(std::move(other.db_)),
       dbPath_(std::move(other.dbPath_)),
       ai_analysis_cf_(other.ai_analysis_cf_),
-      embeddings_cf_(other.embeddings_cf_) {
+      embeddings_cf_(other.embeddings_cf_),
+      anomalies_cf_(other.anomalies_cf_) {
     other.ai_analysis_cf_ = nullptr;
     other.embeddings_cf_ = nullptr;
+    other.anomalies_cf_ = nullptr;
 }
 
 EventStore& EventStore::operator=(EventStore&& other) noexcept {
@@ -96,13 +106,18 @@ EventStore& EventStore::operator=(EventStore&& other) noexcept {
         if (embeddings_cf_) {
             delete embeddings_cf_;
         }
+        if (anomalies_cf_) {
+            delete anomalies_cf_;
+        }
 
         db_ = std::move(other.db_);
         dbPath_ = std::move(other.dbPath_);
         ai_analysis_cf_ = other.ai_analysis_cf_;
         embeddings_cf_ = other.embeddings_cf_;
+        anomalies_cf_ = other.anomalies_cf_;
         other.ai_analysis_cf_ = nullptr;
         other.embeddings_cf_ = nullptr;
+        other.anomalies_cf_ = nullptr;
     }
     return *this;
 }
@@ -649,6 +664,215 @@ uint64_t EventStore::getEmbeddingCount() {
     uint64_t count = 0;
     rocksdb::ReadOptions read_options;
     std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(read_options, embeddings_cf_));
+
+    for (it->SeekToFirst(); it->Valid(); it->Next()) {
+        count++;
+    }
+
+    return count;
+}
+
+// Anomaly storage methods
+
+bool EventStore::putAnomaly(const AnomalyResult& anomaly) {
+    if (!db_ || !anomalies_cf_) {
+        return false;
+    }
+
+    try {
+        // Key format: timestamp:event_id (for time-ordered retrieval)
+        std::ostringstream key_stream;
+        key_stream << std::setfill('0') << std::setw(15) << anomaly.timestamp << ":" << anomaly.event_id;
+        std::string key = key_stream.str();
+        std::string value = anomaly.toJson();
+
+        rocksdb::WriteOptions write_options;
+        write_options.sync = false;  // Async writes for better performance
+
+        rocksdb::Status status = db_->Put(write_options, anomalies_cf_, key, value);
+
+        if (!status.ok()) {
+            std::cerr << "[EventStore] Failed to put anomaly: " << status.ToString() << std::endl;
+            return false;
+        }
+
+        return true;
+    } catch (const std::exception& e) {
+        std::cerr << "[EventStore] Exception in putAnomaly: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+std::optional<AnomalyResult> EventStore::getAnomaly(const std::string& eventId) {
+    if (!db_ || !anomalies_cf_) {
+        return std::nullopt;
+    }
+
+    try {
+        // Since we don't know the timestamp, we need to scan
+        rocksdb::ReadOptions read_options;
+        std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(read_options, anomalies_cf_));
+
+        for (it->SeekToFirst(); it->Valid(); it->Next()) {
+            std::string key = it->key().ToString();
+
+            // Check if this key ends with our event ID
+            if (key.find(":" + eventId) != std::string::npos) {
+                std::string value = it->value().ToString();
+                return AnomalyResult::fromJson(value);
+            }
+        }
+
+        if (!it->status().ok()) {
+            std::cerr << "[EventStore] Iterator error: " << it->status().ToString() << std::endl;
+        }
+
+        return std::nullopt;
+    } catch (const std::exception& e) {
+        std::cerr << "[EventStore] Exception in getAnomaly: " << e.what() << std::endl;
+        return std::nullopt;
+    }
+}
+
+std::vector<AnomalyResult> EventStore::getAnomaliesByTimeRange(
+    uint64_t startTime,
+    uint64_t endTime,
+    size_t limit
+) {
+    std::vector<AnomalyResult> anomalies;
+
+    if (!db_ || !anomalies_cf_) {
+        return anomalies;
+    }
+
+    try {
+        rocksdb::ReadOptions read_options;
+        std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(read_options, anomalies_cf_));
+
+        // Create key range for time-based scan
+        std::ostringstream start_key_stream, end_key_stream;
+        start_key_stream << std::setfill('0') << std::setw(15) << startTime << ":";
+        end_key_stream << std::setfill('0') << std::setw(15) << endTime << ":~";  // '~' is after ':'
+        std::string start_key = start_key_stream.str();
+        std::string end_key = end_key_stream.str();
+
+        // Seek to start position
+        it->Seek(start_key);
+
+        while (it->Valid()) {
+            std::string key = it->key().ToString();
+
+            // Check if we've moved past our time range
+            if (key > end_key) {
+                break;
+            }
+
+            std::string value = it->value().ToString();
+            auto anomaly = AnomalyResult::fromJson(value);
+            anomalies.push_back(anomaly);
+
+            if (limit > 0 && anomalies.size() >= limit) {
+                break;
+            }
+
+            it->Next();
+        }
+
+        if (!it->status().ok()) {
+            std::cerr << "[EventStore] Iterator error: " << it->status().ToString() << std::endl;
+        }
+
+    } catch (const std::exception& e) {
+        std::cerr << "[EventStore] Exception in getAnomaliesByTimeRange: " << e.what() << std::endl;
+    }
+
+    return anomalies;
+}
+
+std::vector<AnomalyResult> EventStore::getAnomaliesByUser(
+    const std::string& user,
+    size_t limit
+) {
+    std::vector<AnomalyResult> anomalies;
+
+    if (!db_ || !anomalies_cf_) {
+        return anomalies;
+    }
+
+    try {
+        rocksdb::ReadOptions read_options;
+        std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(read_options, anomalies_cf_));
+
+        for (it->SeekToFirst(); it->Valid(); it->Next()) {
+            std::string value = it->value().ToString();
+            auto anomaly = AnomalyResult::fromJson(value);
+
+            if (anomaly.user == user) {
+                anomalies.push_back(anomaly);
+
+                if (limit > 0 && anomalies.size() >= limit) {
+                    break;
+                }
+            }
+        }
+
+        if (!it->status().ok()) {
+            std::cerr << "[EventStore] Iterator error: " << it->status().ToString() << std::endl;
+        }
+
+    } catch (const std::exception& e) {
+        std::cerr << "[EventStore] Exception in getAnomaliesByUser: " << e.what() << std::endl;
+    }
+
+    return anomalies;
+}
+
+std::vector<AnomalyResult> EventStore::getHighScoreAnomalies(
+    double threshold,
+    size_t limit
+) {
+    std::vector<AnomalyResult> anomalies;
+
+    if (!db_ || !anomalies_cf_) {
+        return anomalies;
+    }
+
+    try {
+        rocksdb::ReadOptions read_options;
+        std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(read_options, anomalies_cf_));
+
+        for (it->SeekToFirst(); it->Valid(); it->Next()) {
+            std::string value = it->value().ToString();
+            auto anomaly = AnomalyResult::fromJson(value);
+
+            if (anomaly.anomaly_score >= threshold) {
+                anomalies.push_back(anomaly);
+
+                if (limit > 0 && anomalies.size() >= limit) {
+                    break;
+                }
+            }
+        }
+
+        if (!it->status().ok()) {
+            std::cerr << "[EventStore] Iterator error: " << it->status().ToString() << std::endl;
+        }
+
+    } catch (const std::exception& e) {
+        std::cerr << "[EventStore] Exception in getHighScoreAnomalies: " << e.what() << std::endl;
+    }
+
+    return anomalies;
+}
+
+uint64_t EventStore::getAnomalyCount() {
+    if (!db_ || !anomalies_cf_) {
+        return 0;
+    }
+
+    uint64_t count = 0;
+    rocksdb::ReadOptions read_options;
+    std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(read_options, anomalies_cf_));
 
     for (it->SeekToFirst(); it->Valid(); it->Next()) {
         count++;

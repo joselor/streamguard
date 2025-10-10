@@ -8,6 +8,7 @@
 #include "event.h"
 #include "metrics.h"
 #include "ai_analyzer.h"
+#include "anomaly_detector.h"
 
 /**
  * StreamGuard Stream Processor - Main Entry Point
@@ -135,6 +136,10 @@ int main(int argc, char* argv[]) {
             std::cout << "[Main] AI threat analysis disabled (no API key provided)" << std::endl;
         }
 
+        // Create Anomaly Detector
+        streamguard::AnomalyDetector anomalyDetector(100);  // 100 events minimum baseline
+        std::cout << "[Main] Anomaly detection enabled (baseline: 100 events per user)" << std::endl;
+
         // Create Kafka consumer
         streamguard::KafkaConsumer consumer(
             config.broker,
@@ -146,8 +151,8 @@ int main(int argc, char* argv[]) {
         std::signal(SIGINT, signalHandler);
         std::signal(SIGTERM, signalHandler);
 
-        // Set event processing callback with shutdown check, persistence, metrics, and AI analysis
-        consumer.setEventCallback([&consumer, &store, &metrics, &aiAnalyzer](const streamguard::Event& event) {
+        // Set event processing callback with shutdown check, persistence, metrics, AI analysis, and anomaly detection
+        consumer.setEventCallback([&consumer, &store, &metrics, &aiAnalyzer, &anomalyDetector](const streamguard::Event& event) {
             // Check for shutdown signal
             if (shutdownRequested.load()) {
                 consumer.shutdown();
@@ -166,6 +171,28 @@ int main(int argc, char* argv[]) {
                 // Record metrics
                 metrics.incrementEventsProcessed(streamguard::eventTypeToString(event.event_type));
                 metrics.recordProcessingLatency(latency.count());
+
+                // Perform anomaly detection
+                auto anomaly = anomalyDetector.analyze(event);
+                if (anomaly) {
+                    // Store anomaly in RocksDB
+                    if (store.putAnomaly(*anomaly)) {
+                        std::cout << "[Anomaly] User " << anomaly->user
+                                  << " score=" << anomaly->anomaly_score
+                                  << " reasons: ";
+                        for (const auto& reason : anomaly->reasons) {
+                            std::cout << reason << "; ";
+                        }
+                        std::cout << std::endl;
+                    }
+
+                    // Record anomaly metrics
+                    std::string score_range = anomaly->anomaly_score >= 0.9 ? "critical" :
+                                             anomaly->anomaly_score >= 0.8 ? "high" :
+                                             anomaly->anomaly_score >= 0.7 ? "medium" : "low";
+                    metrics.incrementAnomaliesDetected(anomaly->user, score_range);
+                    metrics.recordAnomalyScore(anomaly->anomaly_score);
+                }
 
                 // Check threat score and record if it's a threat
                 if (event.threat_score > 0.7) {

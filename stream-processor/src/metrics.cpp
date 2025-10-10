@@ -23,9 +23,17 @@ Metrics::Metrics(int port)
           .Name("streamguard_kafka_errors_total")
           .Help("Total number of Kafka consumer errors")
           .Register(*registry_)),
+      anomalies_detected_family_(prometheus::BuildCounter()
+          .Name("streamguard_anomalies_detected_total")
+          .Help("Total number of anomalies detected")
+          .Register(*registry_)),
       processing_latency_family_(prometheus::BuildHistogram()
           .Name("streamguard_processing_latency_seconds")
           .Help("Event processing latency in seconds")
+          .Register(*registry_)),
+      anomaly_score_family_(prometheus::BuildHistogram()
+          .Name("streamguard_anomaly_score")
+          .Help("Distribution of anomaly scores")
           .Register(*registry_)),
       rocksdb_size_family_(prometheus::BuildGauge()
           .Name("streamguard_rocksdb_size_bytes")
@@ -67,6 +75,20 @@ void Metrics::incrementStorageErrors() {
 
 void Metrics::incrementKafkaErrors() {
     kafka_errors_.Add({}).Increment();
+}
+
+void Metrics::incrementAnomaliesDetected(const std::string& user, const std::string& score_range) {
+    anomalies_detected_family_.Add({{"user", user}, {"score_range", score_range}}).Increment();
+}
+
+void Metrics::recordAnomalyScore(double score) {
+    // Create histogram with buckets for anomaly scores:
+    // 0.0-0.1, 0.1-0.2, ..., 0.9-1.0
+    static const std::vector<double> buckets = {
+        0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0
+    };
+
+    anomaly_score_family_.Add({}, buckets).Observe(score);
 }
 
 } // namespace streamguard

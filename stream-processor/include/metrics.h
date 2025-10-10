@@ -77,6 +77,19 @@ public:
     void incrementKafkaErrors();
 
     /**
+     * Increment anomalies detected counter
+     * @param user Username for which anomaly was detected
+     * @param score_range Range of anomaly score (low, medium, high, critical)
+     */
+    void incrementAnomaliesDetected(const std::string& user, const std::string& score_range);
+
+    /**
+     * Record anomaly score distribution
+     * @param score Anomaly score (0.0-1.0)
+     */
+    void recordAnomalyScore(double score);
+
+    /**
      * Get the metrics registry (for testing)
      */
     std::shared_ptr<prometheus::Registry> getRegistry() const {
@@ -95,9 +108,11 @@ private:
     prometheus::Family<prometheus::Counter>& threats_detected_family_;
     prometheus::Family<prometheus::Counter>& storage_errors_;
     prometheus::Family<prometheus::Counter>& kafka_errors_;
+    prometheus::Family<prometheus::Counter>& anomalies_detected_family_;
 
     // Histograms - track distributions
     prometheus::Family<prometheus::Histogram>& processing_latency_family_;
+    prometheus::Family<prometheus::Histogram>& anomaly_score_family_;
 
     // Gauges - values that can go up or down
     prometheus::Family<prometheus::Gauge>& rocksdb_size_family_;

@@ -67,10 +67,23 @@ set(AI_SOURCES
     src/ai_analyzer.cpp
 )
 
+set(ANOMALY_SOURCES
+    src/anomaly_detector.cpp
+)
+
 # Create library from event.cpp
 add_library(streamguard_event STATIC ${EVENT_SOURCES})
 
 target_link_libraries(streamguard_event
+    nlohmann_json::nlohmann_json
+    pthread
+)
+
+# Create library from anomaly_detector.cpp (before store, because store depends on it)
+add_library(streamguard_anomaly STATIC ${ANOMALY_SOURCES})
+
+target_link_libraries(streamguard_anomaly
+    streamguard_event
     nlohmann_json::nlohmann_json
     pthread
 )
@@ -80,6 +93,7 @@ add_library(streamguard_store STATIC ${STORE_SOURCES})
 
 target_link_libraries(streamguard_store
     streamguard_event
+    streamguard_anomaly
     RocksDB::rocksdb
     nlohmann_json::nlohmann_json
     pthread
@@ -124,6 +138,7 @@ target_link_libraries(stream-processor
     streamguard_store
     streamguard_metrics
     streamguard_ai
+    streamguard_anomaly
     streamguard_event
     ${RDKAFKA_LIB}
     RocksDB::rocksdb

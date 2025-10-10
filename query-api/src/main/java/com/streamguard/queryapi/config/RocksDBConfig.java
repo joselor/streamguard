@@ -96,6 +96,25 @@ public class RocksDBConfig {
         return null;
     }
 
+    @Bean(name = "anomaliesColumnFamily")
+    public ColumnFamilyHandle anomaliesColumnFamily() {
+        // Find anomalies column family
+        for (int i = 0; i < columnFamilyHandles.size(); i++) {
+            try {
+                String name = new String(columnFamilyHandles.get(i).getName());
+                if ("anomalies".equals(name)) {
+                    log.info("Found anomalies column family at index {}", i);
+                    return columnFamilyHandles.get(i);
+                }
+            } catch (RocksDBException e) {
+                log.error("Error reading column family name", e);
+            }
+        }
+        log.warn("anomalies column family not found, this is expected for databases created before US-208");
+        // Return a dummy handle that will be checked for null in QueryService
+        return null;
+    }
+
     @PreDestroy
     public void closeDB() {
         if (db != null) {

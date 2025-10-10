@@ -11,6 +11,9 @@
 
 namespace streamguard {
 
+// Forward declaration
+struct AnomalyResult;
+
 /**
  * Time-series event storage using RocksDB.
  *
@@ -225,6 +228,70 @@ public:
      */
     uint64_t getEmbeddingCount();
 
+    /**
+     * Stores an anomaly detection result.
+     *
+     * Key format: timestamp:event_id
+     * Value: JSON serialized AnomalyResult
+     *
+     * @param anomaly The anomaly result to store
+     * @return true if successful, false otherwise
+     */
+    bool putAnomaly(const struct AnomalyResult& anomaly);
+
+    /**
+     * Retrieves an anomaly by event ID.
+     *
+     * @param eventId The event ID to look up
+     * @return Optional AnomalyResult if found
+     */
+    std::optional<struct AnomalyResult> getAnomaly(const std::string& eventId);
+
+    /**
+     * Retrieves anomalies within a time range.
+     *
+     * @param startTime Start timestamp (inclusive, milliseconds since epoch)
+     * @param endTime End timestamp (inclusive, milliseconds since epoch)
+     * @param limit Maximum number of anomalies to return (0 = no limit)
+     * @return Vector of anomalies matching the criteria
+     */
+    std::vector<struct AnomalyResult> getAnomaliesByTimeRange(
+        uint64_t startTime,
+        uint64_t endTime,
+        size_t limit = 0
+    );
+
+    /**
+     * Retrieves anomalies by user.
+     *
+     * @param user Username
+     * @param limit Maximum number of anomalies to return (0 = no limit)
+     * @return Vector of anomalies for the user
+     */
+    std::vector<struct AnomalyResult> getAnomaliesByUser(
+        const std::string& user,
+        size_t limit = 0
+    );
+
+    /**
+     * Retrieves high-score anomalies (score > threshold).
+     *
+     * @param threshold Minimum anomaly score (default: 0.7)
+     * @param limit Maximum number of anomalies to return (0 = no limit)
+     * @return Vector of high-score anomalies
+     */
+    std::vector<struct AnomalyResult> getHighScoreAnomalies(
+        double threshold = 0.7,
+        size_t limit = 0
+    );
+
+    /**
+     * Returns the total number of anomalies stored.
+     *
+     * @return Total anomaly count
+     */
+    uint64_t getAnomalyCount();
+
 private:
     /**
      * Generates a composite key for storage.
@@ -247,6 +314,7 @@ private:
     std::string dbPath_;
     rocksdb::ColumnFamilyHandle* ai_analysis_cf_;  // Column family for AI analyses
     rocksdb::ColumnFamilyHandle* embeddings_cf_;   // Column family for embeddings
+    rocksdb::ColumnFamilyHandle* anomalies_cf_;    // Column family for anomalies
 };
 
 } // namespace streamguard
