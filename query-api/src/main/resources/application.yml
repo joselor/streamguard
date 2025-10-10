@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: streamguard-query-api
+
+server:
+  port: 8081
+
+# RocksDB Configuration
+rocksdb:
+  path: ${ROCKSDB_PATH:../stream-processor/build/data/events.db}
+  read-only: true
+
+# Actuator endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+# Swagger/OpenAPI
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+
+# Logging
+logging:
+  level:
+    com.streamguard: DEBUG
+    org.springframework: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
