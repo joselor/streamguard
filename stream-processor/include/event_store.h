@@ -4,8 +4,10 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <optional>
 #include <rocksdb/db.h>
 #include "event.h"
+#include "ai_analyzer.h"
 
 namespace streamguard {
 
@@ -132,6 +134,58 @@ public:
      */
     uint64_t deleteOlderThan(uint64_t timestamp);
 
+    /**
+     * Stores an AI threat analysis result.
+     *
+     * Key format: event_id
+     * Value: JSON serialized ThreatAnalysis
+     *
+     * @param analysis The threat analysis to store
+     * @return true if successful, false otherwise
+     */
+    bool putAnalysis(const ThreatAnalysis& analysis);
+
+    /**
+     * Retrieves an AI analysis by event ID.
+     *
+     * @param eventId The event ID to look up
+     * @return Optional ThreatAnalysis if found
+     */
+    std::optional<ThreatAnalysis> getAnalysis(const std::string& eventId);
+
+    /**
+     * Retrieves AI analyses within a time range.
+     *
+     * @param startTime Start timestamp (inclusive, seconds since epoch)
+     * @param endTime End timestamp (inclusive, seconds since epoch)
+     * @param limit Maximum number of analyses to return (0 = no limit)
+     * @return Vector of analyses matching the criteria
+     */
+    std::vector<ThreatAnalysis> getAnalysesByTimeRange(
+        uint64_t startTime,
+        uint64_t endTime,
+        size_t limit = 0
+    );
+
+    /**
+     * Retrieves analyses by severity level.
+     *
+     * @param severity Severity level (CRITICAL, HIGH, MEDIUM, LOW)
+     * @param limit Maximum number of analyses to return (0 = no limit)
+     * @return Vector of analyses with specified severity
+     */
+    std::vector<ThreatAnalysis> getAnalysesBySeverity(
+        const std::string& severity,
+        size_t limit = 0
+    );
+
+    /**
+     * Returns the total number of AI analyses stored.
+     *
+     * @return Total analysis count
+     */
+    uint64_t getAnalysisCount();
+
 private:
     /**
      * Generates a composite key for storage.
@@ -152,6 +206,7 @@ private:
 
     std::unique_ptr<rocksdb::DB> db_;
     std::string dbPath_;
+    rocksdb::ColumnFamilyHandle* ai_analysis_cf_;  // Column family for AI analyses
 };
 
 } // namespace streamguard

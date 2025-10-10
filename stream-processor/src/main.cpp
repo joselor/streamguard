@@ -177,7 +177,13 @@ int main(int argc, char* argv[]) {
                     if (aiAnalyzer.isEnabled()) {
                         auto analysis = aiAnalyzer.analyze(event);
                         if (analysis) {
-                            std::cout << "[AI Analysis] Event " << event.event_id << std::endl;
+                            // Store AI analysis in RocksDB
+                            if (store.putAnalysis(*analysis)) {
+                                std::cout << "[AI Analysis] Event " << event.event_id << " (stored)" << std::endl;
+                            } else {
+                                std::cout << "[AI Analysis] Event " << event.event_id << " (storage failed)" << std::endl;
+                            }
+
                             std::cout << "  Attack Type: " << analysis->attack_type << std::endl;
                             std::cout << "  Severity: " << analysis->severity << std::endl;
                             std::cout << "  Description: " << analysis->description << std::endl;
