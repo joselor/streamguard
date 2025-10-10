@@ -7,10 +7,12 @@
 #include <iostream>
 #include <sstream>
 #include <iomanip>
+#include <algorithm>
+#include <cstring>
 
 namespace streamguard {
 
-EventStore::EventStore(const std::string& dbPath) : dbPath_(dbPath), ai_analysis_cf_(nullptr) {
+EventStore::EventStore(const std::string& dbPath) : dbPath_(dbPath), ai_analysis_cf_(nullptr), embeddings_cf_(nullptr) {
     rocksdb::Options options;
 
     // Create database if it doesn't exist
@@ -35,6 +37,8 @@ EventStore::EventStore(const std::string& dbPath) : dbPath_(dbPath), ai_analysis
         rocksdb::kDefaultColumnFamilyName, rocksdb::ColumnFamilyOptions(options)));
     column_families.push_back(rocksdb::ColumnFamilyDescriptor(
         "ai_analysis", rocksdb::ColumnFamilyOptions(options)));
+    column_families.push_back(rocksdb::ColumnFamilyDescriptor(
+        "embeddings", rocksdb::ColumnFamilyOptions(options)));
 
     // Open database with column families
     std::vector<rocksdb::ColumnFamilyHandle*> handles;
@@ -47,22 +51,27 @@ EventStore::EventStore(const std::string& dbPath) : dbPath_(dbPath), ai_analysis
 
     db_.reset(db_ptr);
     ai_analysis_cf_ = handles[1];  // ai_analysis column family
+    embeddings_cf_ = handles[2];   // embeddings column family
 
     // Note: handles[0] is default column family (events), owned by db_
-    // We store handle[1] for ai_analysis queries
+    // We store handle[1] for ai_analysis queries, handle[2] for embeddings
 
     std::cout << "[EventStore] Database opened at: " << dbPath << std::endl;
-    std::cout << "[EventStore] Column families: default (events), ai_analysis" << std::endl;
+    std::cout << "[EventStore] Column families: default (events), ai_analysis, embeddings" << std::endl;
 }
 
 EventStore::~EventStore() {
     if (db_) {
         std::cout << "[EventStore] Closing database..." << std::endl;
 
-        // Delete column family handle before closing DB
+        // Delete column family handles before closing DB
         if (ai_analysis_cf_) {
             delete ai_analysis_cf_;
             ai_analysis_cf_ = nullptr;
+        }
+        if (embeddings_cf_) {
+            delete embeddings_cf_;
+            embeddings_cf_ = nullptr;
         }
 
         db_.reset();  // Unique_ptr will call delete and close the DB
@@ -72,21 +81,28 @@ EventStore::~EventStore() {
 EventStore::EventStore(EventStore&& other) noexcept
     : db_(std::move(other.db_)),
       dbPath_(std::move(other.dbPath_)),
-      ai_analysis_cf_(other.ai_analysis_cf_) {
+      ai_analysis_cf_(other.ai_analysis_cf_),
+      embeddings_cf_(other.embeddings_cf_) {
     other.ai_analysis_cf_ = nullptr;
+    other.embeddings_cf_ = nullptr;
 }
 
 EventStore& EventStore::operator=(EventStore&& other) noexcept {
     if (this != &other) {
-        // Delete existing column family handle
+        // Delete existing column family handles
         if (ai_analysis_cf_) {
             delete ai_analysis_cf_;
+        }
+        if (embeddings_cf_) {
+            delete embeddings_cf_;
         }
 
         db_ = std::move(other.db_);
         dbPath_ = std::move(other.dbPath_);
         ai_analysis_cf_ = other.ai_analysis_cf_;
+        embeddings_cf_ = other.embeddings_cf_;
         other.ai_analysis_cf_ = nullptr;
+        other.embeddings_cf_ = nullptr;
     }
     return *this;
 }
@@ -507,6 +523,132 @@ uint64_t EventStore::getAnalysisCount() {
     uint64_t count = 0;
     rocksdb::ReadOptions read_options;
     std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(read_options, ai_analysis_cf_));
+
+    for (it->SeekToFirst(); it->Valid(); it->Next()) {
+        count++;
+    }
+
+    return count;
+}
+
+// Embedding storage methods
+
+bool EventStore::putEmbedding(const std::string& eventId, const std::vector<float>& embedding) {
+    if (!db_ || !embeddings_cf_) {
+        return false;
+    }
+
+    try {
+        // Serialize float vector to binary blob
+        // Simple binary serialization: convert float array to byte string
+        std::string value(reinterpret_cast<const char*>(embedding.data()),
+                         embedding.size() * sizeof(float));
+
+        rocksdb::WriteOptions write_options;
+        write_options.sync = false;  // Async writes for better performance
+
+        rocksdb::Status status = db_->Put(write_options, embeddings_cf_, eventId, value);
+
+        if (!status.ok()) {
+            std::cerr << "[EventStore] Failed to put embedding: " << status.ToString() << std::endl;
+            return false;
+        }
+
+        return true;
+    } catch (const std::exception& e) {
+        std::cerr << "[EventStore] Exception in putEmbedding: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+std::optional<std::vector<float>> EventStore::getEmbedding(const std::string& eventId) {
+    if (!db_ || !embeddings_cf_) {
+        return std::nullopt;
+    }
+
+    try {
+        std::string value;
+        rocksdb::ReadOptions read_options;
+        rocksdb::Status status = db_->Get(read_options, embeddings_cf_, eventId, &value);
+
+        if (status.ok()) {
+            // Deserialize binary blob to float vector
+            size_t num_floats = value.size() / sizeof(float);
+            std::vector<float> embedding(num_floats);
+            std::memcpy(embedding.data(), value.data(), value.size());
+            return embedding;
+        } else if (status.IsNotFound()) {
+            return std::nullopt;
+        } else {
+            std::cerr << "[EventStore] Failed to get embedding: " << status.ToString() << std::endl;
+            return std::nullopt;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "[EventStore] Exception in getEmbedding: " << e.what() << std::endl;
+        return std::nullopt;
+    }
+}
+
+std::vector<std::pair<std::string, double>> EventStore::findSimilar(
+    const std::vector<float>& queryEmbedding,
+    size_t k
+) {
+    std::vector<std::pair<std::string, double>> results;
+
+    if (!db_ || !embeddings_cf_ || queryEmbedding.empty()) {
+        return results;
+    }
+
+    try {
+        // Simple linear scan approach - good enough for demo
+        std::vector<std::pair<std::string, double>> all_similarities;
+
+        rocksdb::ReadOptions read_options;
+        std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(read_options, embeddings_cf_));
+
+        // Iterate through all embeddings and calculate similarity
+        for (it->SeekToFirst(); it->Valid(); it->Next()) {
+            std::string event_id = it->key().ToString();
+            std::string value = it->value().ToString();
+
+            // Deserialize embedding
+            size_t num_floats = value.size() / sizeof(float);
+            std::vector<float> embedding(num_floats);
+            std::memcpy(embedding.data(), value.data(), value.size());
+
+            // Calculate cosine similarity
+            double similarity = AIAnalyzer::cosineSimilarity(queryEmbedding, embedding);
+            all_similarities.push_back({event_id, similarity});
+        }
+
+        if (!it->status().ok()) {
+            std::cerr << "[EventStore] Iterator error in findSimilar: " << it->status().ToString() << std::endl;
+            return results;
+        }
+
+        // Sort by similarity (descending) and take top-K
+        std::sort(all_similarities.begin(), all_similarities.end(),
+                 [](const auto& a, const auto& b) { return a.second > b.second; });
+
+        // Return top-K results
+        size_t result_count = std::min(k, all_similarities.size());
+        results.assign(all_similarities.begin(), all_similarities.begin() + result_count);
+
+    } catch (const std::exception& e) {
+        std::cerr << "[EventStore] Exception in findSimilar: " << e.what() << std::endl;
+    }
+
+    return results;
+}
+
+uint64_t EventStore::getEmbeddingCount() {
+    if (!db_ || !embeddings_cf_) {
+        return 0;
+    }
+
+    uint64_t count = 0;
+    rocksdb::ReadOptions read_options;
+    std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(read_options, embeddings_cf_));
 
     for (it->SeekToFirst(); it->Valid(); it->Next()) {
         count++;

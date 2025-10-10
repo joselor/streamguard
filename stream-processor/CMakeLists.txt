@@ -134,6 +134,23 @@ target_link_libraries(stream-processor
     pthread
 )
 
+# Embedding test executable
+add_executable(test-embeddings
+    test_embeddings.cpp
+)
+
+target_link_libraries(test-embeddings
+    streamguard_consumer
+    streamguard_store
+    streamguard_ai
+    streamguard_event
+    ${RDKAFKA_LIB}
+    RocksDB::rocksdb
+    CURL::libcurl
+    nlohmann_json::nlohmann_json
+    pthread
+)
+
 # Unit tests (if Google Test is found)
 if(GTest_FOUND)
     enable_testing()

@@ -272,4 +272,135 @@ std::string AIAnalyzer::getSeverityLevel(double threat_score) const {
     }
 }
 
+std::optional<std::vector<float>> AIAnalyzer::generateEmbedding(const Event& event) {
+    if (!enabled_) {
+        return std::nullopt;
+    }
+
+    // Build text representation of the event for embedding
+    std::stringstream ss;
+    ss << "Security Event: " << eventTypeToString(event.event_type) << ". ";
+    ss << "User: " << event.user << ". ";
+    ss << "Source IP: " << event.source_ip << ". ";
+
+    if (!event.destination_ip.empty()) {
+        ss << "Destination IP: " << event.destination_ip << ". ";
+    }
+    if (!event.metadata.file_path.empty()) {
+        ss << "File: " << event.metadata.file_path << ". ";
+    }
+    if (!event.metadata.domain.empty()) {
+        ss << "Domain: " << event.metadata.domain << ". ";
+    }
+    if (!event.metadata.process_name.empty()) {
+        ss << "Process: " << event.metadata.process_name << ". ";
+    }
+
+    ss << "Threat Score: " << event.threat_score;
+
+    std::string text = ss.str();
+
+    // Make API request to embeddings endpoint
+    CURL* curl = curl_easy_init();
+    if (!curl) {
+        std::cerr << "[AIAnalyzer] Failed to initialize CURL for embedding" << std::endl;
+        return std::nullopt;
+    }
+
+    std::string response_string;
+    struct curl_slist* headers = nullptr;
+
+    try {
+        // Build request body for embeddings API
+        json request_body;
+        request_body["model"] = "text-embedding-3-small";
+        request_body["input"] = text;
+
+        std::string request_str = request_body.dump();
+
+        // Set headers
+        headers = curl_slist_append(headers, "Content-Type: application/json");
+        std::string auth_header = "Authorization: Bearer " + api_key_;
+        headers = curl_slist_append(headers, auth_header.c_str());
+
+        // Configure CURL for embeddings endpoint
+        curl_easy_setopt(curl, CURLOPT_URL, "https://api.openai.com/v1/embeddings");
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request_str.c_str());
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_string);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+
+        // Perform request
+        CURLcode res = curl_easy_perform(curl);
+
+        if (res != CURLE_OK) {
+            std::cerr << "[AIAnalyzer] Embedding CURL request failed: " << curl_easy_strerror(res) << std::endl;
+            curl_slist_free_all(headers);
+            curl_easy_cleanup(curl);
+            return std::nullopt;
+        }
+
+        long http_code = 0;
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+
+        if (http_code != 200) {
+            std::cerr << "[AIAnalyzer] Embedding API failed with HTTP " << http_code << std::endl;
+            curl_slist_free_all(headers);
+            curl_easy_cleanup(curl);
+            return std::nullopt;
+        }
+
+        curl_slist_free_all(headers);
+        curl_easy_cleanup(curl);
+
+        // Parse response and extract embedding vector
+        auto response_json = json::parse(response_string);
+
+        if (!response_json.contains("data") || response_json["data"].empty()) {
+            std::cerr << "[AIAnalyzer] Invalid embedding response: no data" << std::endl;
+            return std::nullopt;
+        }
+
+        auto embedding_json = response_json["data"][0]["embedding"];
+        std::vector<float> embedding;
+        embedding.reserve(embedding_json.size());
+
+        for (const auto& val : embedding_json) {
+            embedding.push_back(val.get<float>());
+        }
+
+        return embedding;
+
+    } catch (const std::exception& e) {
+        std::cerr << "[AIAnalyzer] Exception in generateEmbedding: " << e.what() << std::endl;
+        if (headers) curl_slist_free_all(headers);
+        curl_easy_cleanup(curl);
+        return std::nullopt;
+    }
+}
+
+double AIAnalyzer::cosineSimilarity(const std::vector<float>& vec1,
+                                    const std::vector<float>& vec2) {
+    if (vec1.size() != vec2.size() || vec1.empty()) {
+        return 0.0;
+    }
+
+    double dot_product = 0.0;
+    double norm1 = 0.0;
+    double norm2 = 0.0;
+
+    for (size_t i = 0; i < vec1.size(); ++i) {
+        dot_product += vec1[i] * vec2[i];
+        norm1 += vec1[i] * vec1[i];
+        norm2 += vec2[i] * vec2[i];
+    }
+
+    if (norm1 == 0.0 || norm2 == 0.0) {
+        return 0.0;
+    }
+
+    return dot_product / (std::sqrt(norm1) * std::sqrt(norm2));
+}
+
 } // namespace streamguard

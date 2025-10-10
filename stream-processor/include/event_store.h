@@ -186,6 +186,45 @@ public:
      */
     uint64_t getAnalysisCount();
 
+    /**
+     * Stores an embedding vector for an event.
+     *
+     * Key format: event_id
+     * Value: Binary serialized embedding vector (float array)
+     *
+     * @param eventId The event ID
+     * @param embedding The embedding vector to store
+     * @return true if successful, false otherwise
+     */
+    bool putEmbedding(const std::string& eventId, const std::vector<float>& embedding);
+
+    /**
+     * Retrieves an embedding vector by event ID.
+     *
+     * @param eventId The event ID to look up
+     * @return Optional embedding vector if found
+     */
+    std::optional<std::vector<float>> getEmbedding(const std::string& eventId);
+
+    /**
+     * Find top-K similar events based on embedding similarity.
+     *
+     * @param queryEmbedding The query embedding vector
+     * @param k Number of similar events to return
+     * @return Vector of (event_id, similarity_score) pairs, sorted by similarity
+     */
+    std::vector<std::pair<std::string, double>> findSimilar(
+        const std::vector<float>& queryEmbedding,
+        size_t k = 5
+    );
+
+    /**
+     * Returns the total number of embeddings stored.
+     *
+     * @return Total embedding count
+     */
+    uint64_t getEmbeddingCount();
+
 private:
     /**
      * Generates a composite key for storage.
@@ -207,6 +246,7 @@ private:
     std::unique_ptr<rocksdb::DB> db_;
     std::string dbPath_;
     rocksdb::ColumnFamilyHandle* ai_analysis_cf_;  // Column family for AI analyses
+    rocksdb::ColumnFamilyHandle* embeddings_cf_;   // Column family for embeddings
 };
 
 } // namespace streamguard

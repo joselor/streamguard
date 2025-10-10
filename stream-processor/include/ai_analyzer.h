@@ -86,6 +86,25 @@ public:
      */
     uint64_t getErrorCount() const { return error_count_; }
 
+    /**
+     * Generate embedding vector for an event
+     * Uses OpenAI text-embedding-3-small model (1536 dimensions)
+     *
+     * @param event The security event to embed
+     * @return Vector of embedding values, or std::nullopt if generation fails
+     */
+    std::optional<std::vector<float>> generateEmbedding(const Event& event);
+
+    /**
+     * Calculate cosine similarity between two embedding vectors
+     *
+     * @param vec1 First embedding vector
+     * @param vec2 Second embedding vector
+     * @return Similarity score between 0.0 and 1.0
+     */
+    static double cosineSimilarity(const std::vector<float>& vec1,
+                                   const std::vector<float>& vec2);
+
 private:
     std::string api_key_;
     std::string model_;

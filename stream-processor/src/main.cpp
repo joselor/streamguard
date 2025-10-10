@@ -193,6 +193,17 @@ int main(int argc, char* argv[]) {
                                 std::cout << "    - " << rec << std::endl;
                             }
                         }
+
+                        // Generate and store embedding for semantic search
+                        auto embedding = aiAnalyzer.generateEmbedding(event);
+                        if (embedding) {
+                            if (store.putEmbedding(event.event_id, *embedding)) {
+                                std::cout << "[Embedding] Event " << event.event_id
+                                          << " embedding stored (" << embedding->size() << " dimensions)" << std::endl;
+                            } else {
+                                std::cout << "[Embedding] Event " << event.event_id << " (storage failed)" << std::endl;
+                            }
+                        }
                     }
                 }
 
