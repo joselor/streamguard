@@ -1,8 +1,24 @@
-# StreamGuard: Real-Time Security Event Processing System
+<div align="center">
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![C++17](https://img.shields.io/badge/C++-17-blue.svg)](https://isocpp.org/)
-[![Java](https://img.shields.io/badge/Java-17-orange.svg)](https://openjdk.org/)
+# 🛡️ StreamGuard
+
+**Real-Time Security Event Stream Processing Platform**
+
+[![CrowdStrike](https://img.shields.io/badge/Built_for-CrowdStrike-E01F27?style=for-the-badge)](https://www.crowdstrike.com)
+[![C++17](https://img.shields.io/badge/C++-17-00599C?style=for-the-badge&logo=c%2B%2B)](https://isocpp.org/)
+[![Java 17](https://img.shields.io/badge/Java-17-ED8B00?style=for-the-badge&logo=openjdk)](https://openjdk.org/)
+[![Apache Kafka](https://img.shields.io/badge/Apache_Kafka-3.6-231F20?style=for-the-badge&logo=apache-kafka)](https://kafka.apache.org/)
+[![RocksDB](https://img.shields.io/badge/RocksDB-8.9-4A90E2?style=for-the-badge)](https://rocksdb.org/)
+[![Prometheus](https://img.shields.io/badge/Prometheus-Metrics-E6522C?style=for-the-badge&logo=prometheus)](https://prometheus.io/)
+[![Grafana](https://img.shields.io/badge/Grafana-Dashboards-F46800?style=for-the-badge&logo=grafana)](https://grafana.com/)
+
+**Enterprise-Grade Stream Processing | AI-Powered Threat Detection | Real-Time Anomaly Detection**
+
+[Architecture](docs/final/guides/ARCHITECTURE.md) • [Quick Start](docs/final/guides/QUICK_START.md) • [Components](docs/final/diagrams/COMPONENT_DIAGRAM.md) • [API Docs](docs/final/api/API_REFERENCE.md) • [Deployment](docs/final/guides/DEPLOYMENT.md)
+
+</div>
+
+---
 
 > A high-throughput distributed system for processing and analyzing security events in real-time, featuring AI-powered threat analysis and behavioral anomaly detection.
 
