@@ -144,7 +144,7 @@ std::optional<AnomalyResult> AnomalyDetector::analyze(const Event& event) {
         baseline.update(event);
 
         // Check if we have enough events to establish baseline
-        if (baseline.total_events >= min_events_for_baseline_) {
+        if (static_cast<size_t>(baseline.total_events) >= min_events_for_baseline_) {
             baseline.is_baseline_ready = true;
         }
 
