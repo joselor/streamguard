@@ -8,6 +8,9 @@
 <img src="https://img.shields.io/badge/Java-17-ED8B00?style=for-the-badge&logo=openjdk" alt="Java 17"/>
 <img src="https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python" alt="Python"/>
 <img src="https://img.shields.io/badge/Kafka-Latest-231F20?style=for-the-badge&logo=apache-kafka" alt="Kafka"/>
+<img src="https://img.shields.io/badge/RocksDB-8.9-4A90E2?style=for-the-badge" alt="RocksDB"/>
+<img src="https://img.shields.io/badge/Prometheus-Metrics-E6522C?style=for-the-badge&logo=prometheus" alt="Prometheus"/>
+<img src="https://img.shields.io/badge/Grafana-Dashboards-F46800?style=for-the-badge&logo=grafana" alt="Grafana"/>
 
 **Enterprise-Grade Stream Processing | AI-Powered Threat Detection | Real-Time Anomaly Detection**
 
