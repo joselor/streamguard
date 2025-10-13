@@ -1,0 +1,12 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Event Generator" type="Application" factoryName="Application">
+    <option name="MAIN_CLASS_NAME" value="com.streamguard.EventGenerator" />
+    <module name="event-generator" />
+    <option name="PROGRAM_PARAMETERS" value="--rate 1000 --duration 60 --broker localhost:9092 --topic security-events" />
+    <option name="VM_PARAMETERS" value="" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/event-generator" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

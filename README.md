@@ -11,26 +11,32 @@
 [![RocksDB](https://img.shields.io/badge/RocksDB-8.9-4A90E2?style=for-the-badge)](https://rocksdb.org/)
 [![Prometheus](https://img.shields.io/badge/Prometheus-Metrics-E6522C?style=for-the-badge&logo=prometheus)](https://prometheus.io/)
 [![Grafana](https://img.shields.io/badge/Grafana-Dashboards-F46800?style=for-the-badge&logo=grafana)](https://grafana.com/)
+[![Apache Spark](https://img.shields.io/badge/Apache_Spark-3.5-E25A1C?style=for-the-badge&logo=apache-spark)](https://spark.apache.org/)
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python)](https://python.org/)
 
-**Enterprise-Grade Stream Processing | AI-Powered Threat Detection | Real-Time Anomaly Detection**
+**Lambda Architecture | Real-Time + Batch Processing | AI-Powered Threat Detection**
 
-[Architecture](docs/final/guides/ARCHITECTURE.md) • [Quick Start](docs/final/guides/QUICK_START.md) • [Components](docs/final/diagrams/COMPONENT_DIAGRAM.md) • [API Docs](docs/final/api/API_REFERENCE.md) • [Deployment](docs/final/guides/DEPLOYMENT.md)
+[Architecture](docs/final/guides/ARCHITECTURE.md) • [Quick Start](docs/final/guides/QUICK_START.md) • [E2E Testing](docs/END_TO_END_TESTING.md) • [Spark Integration](docs/SPARK_INTEGRATION.md) • [API Docs](docs/final/api/API_REFERENCE.md)
 
 </div>
 
 ---
 
-> A high-throughput distributed system for processing and analyzing security events in real-time, featuring AI-powered threat analysis and behavioral anomaly detection.
+> A high-throughput distributed system implementing **Lambda Architecture** for processing and analyzing security events with both real-time and batch capabilities, featuring AI-powered threat analysis and ML-based anomaly detection.
 
 ## 🎯 Project Overview
 
-StreamGuard demonstrates production-grade streaming systems architecture, combining CrowdStrike's core technologies (C++, Kafka, RocksDB) with modern AI capabilities for real-time security event processing at scale.
+StreamGuard demonstrates production-grade **Lambda Architecture**, combining:
+- **Speed Layer** (C++ real-time processor) - Sub-millisecond processing
+- **Batch Layer** (Apache Spark ML pipeline) - Deep analysis & training data generation
+- **Serving Layer** (Java REST API) - Unified query interface
 
 **Key Capabilities:**
-- **10,000+ events/second** processing throughput
-- **Sub-100ms latency** end-to-end
+- **12,000+ events/second** real-time processing
+- **Sub-1ms latency** for anomaly detection
+- **Apache Spark** for batch ML training data generation
 - **AI-powered threat analysis** using Anthropic Claude
-- **Statistical anomaly detection** with behavioral baselines
+- **Statistical + ML anomaly detection** (Isolation Forest, K-Means)
 - **Production-ready** with full observability stack
 
 ## 🚀 Quick Start
@@ -85,15 +91,28 @@ curl http://localhost:8081/api/anomalies/high-score?threshold=0.7
 
 ## 🛠️ Tech Stack
 
+### Speed Layer (Real-Time)
 | Component | Technology | Purpose |
 |-----------|------------|---------|
 | **Stream Processor** | C++17 | High-performance event processing |
-| **Query API** | Java 17 / Spring Boot 3.2 | REST API for querying data |
 | **Message Broker** | Apache Kafka 3.6 | Event streaming |
 | **Storage** | RocksDB 8.9 | Embedded key-value store |
 | **AI Analysis** | Anthropic Claude 3.5 Sonnet | Threat intelligence |
+
+### Batch Layer (ML Pipeline)
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| **Processing Engine** | Apache Spark 3.5 | Distributed data processing |
+| **ML Framework** | PySpark + scikit-learn | Feature engineering & anomaly detection |
+| **Language** | Python 3.11+ | Pipeline implementation |
+| **Storage Format** | Apache Parquet | Columnar training data |
+
+### Serving Layer
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| **Query API** | Java 17 / Spring Boot 3.2 | REST API for querying data |
 | **Monitoring** | Prometheus + Grafana | Observability |
-| **Build** | CMake, Maven | Build systems |
+| **Build** | CMake, Maven, pip | Build systems |
 
 ## ✨ Key Features
 
@@ -130,22 +149,39 @@ curl http://localhost:8081/api/anomalies/high-score?threshold=0.7
 
 ```
 streamguard/
-├── stream-processor/       # C++ processing engine
+├── stream-processor/       # C++ real-time processor (SPEED LAYER)
 │   ├── src/               # Source files
 │   ├── include/           # Header files
 │   ├── tests/             # Unit tests
 │   └── CMakeLists.txt     # Build configuration
 │
-├── query-api/             # Java REST API
+├── spark-ml-pipeline/     # Apache Spark ML pipeline (BATCH LAYER) ⭐ NEW
+│   ├── src/               # Python source files
+│   │   ├── kafka_reader.py        # Kafka event reader
+│   │   ├── feature_extractor.py   # Feature engineering
+│   │   ├── anomaly_detector.py    # ML anomaly detection
+│   │   └── training_data_generator.py  # Main orchestrator
+│   ├── config/            # Configuration files
+│   ├── output/            # Training data output (Parquet)
+│   ├── requirements.txt   # Python dependencies
+│   └── README.md          # Pipeline documentation
+│
+├── query-api/             # Java REST API (SERVING LAYER)
 │   ├── src/main/java/     # Source code
 │   └── pom.xml            # Maven configuration
 │
+├── event-generator/       # Event generator (Java)
+│   └── src/main/java/     # Source code
+│
 ├── docs/                  # Documentation
-│   └── final/             # Comprehensive docs (START HERE!)
-│       ├── README.md      # Main documentation entry point
-│       ├── diagrams/      # UML and architecture diagrams
-│       ├── guides/        # Detailed guides
-│       └── api/           # API reference
+│   ├── final/             # Comprehensive docs (START HERE!)
+│   │   ├── README.md      # Main documentation entry point
+│   │   ├── diagrams/      # UML and architecture diagrams
+│   │   ├── guides/        # Detailed guides
+│   │   └── api/           # API reference
+│   ├── SPARK_INTEGRATION.md       # Spark Lambda Architecture guide ⭐ NEW
+│   ├── SPARK_QUICKSTART.md        # 10-min Spark quick start ⭐ NEW
+│   └── END_TO_END_TESTING.md      # Complete E2E testing guide ⭐ NEW
 │
 ├── docker-compose.yml     # Infrastructure setup
 └── README.md              # This file

@@ -1,0 +1,58 @@
+# Spark ML Pipeline Configuration
+
+# Kafka Settings
+kafka:
+  bootstrap_servers: "localhost:9092"
+  topic: "security-events"
+  group_id: "spark-ml-pipeline"
+  auto_offset_reset: "earliest"
+
+# Spark Settings
+spark:
+  app_name: "StreamGuard ML Training Pipeline"
+  master: "local[*]"  # Use local[*] for development, spark://host:port for cluster
+  executor_memory: "2g"
+  driver_memory: "2g"
+  executor_cores: 2
+  shuffle_partitions: 4
+
+# Feature Engineering
+features:
+  time_windows:
+    - "1h"
+    - "6h"
+    - "24h"
+
+  user_features:
+    - "event_count"
+    - "unique_ips"
+    - "unique_event_types"
+    - "avg_threat_score"
+    - "failed_auth_rate"
+    - "unusual_hour_rate"
+
+  behavioral_features:
+    - "ip_diversity"
+    - "time_consistency"
+    - "event_type_distribution"
+    - "failure_spike_detection"
+
+# Anomaly Detection
+anomaly_detection:
+  algorithm: "isolation_forest"  # or "kmeans", "dbscan"
+  contamination: 0.1  # Expected proportion of anomalies
+  n_estimators: 100
+  random_state: 42
+
+# Output Settings
+output:
+  format: "parquet"
+  path: "./output/training_data"
+  partitions: 4
+  mode: "overwrite"  # or "append"
+
+# Batch Processing
+batch:
+  window_duration: "24h"
+  slide_duration: "1h"
+  max_events_per_batch: 100000

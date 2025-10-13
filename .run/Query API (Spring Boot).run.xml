@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Query API (Spring Boot)" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <module name="query-api" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.streamguard.queryapi.QueryApiApplication" />
+    <option name="VM_PARAMETERS" value="-Dspring.profiles.active=dev" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/query-api" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

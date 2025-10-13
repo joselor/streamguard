@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Maven Test (query-api)" type="MavenRunConfiguration" factoryName="Maven">
+    <MavenSettings>
+      <option name="myWorkingDirPath" value="$PROJECT_DIR$/query-api" />
+      <option name="myGoals" value="test" />
+    </MavenSettings>
+    <method v="2">
+      <option name="Make" enabled="false" />
+    </method>
+  </configuration>
+</component>

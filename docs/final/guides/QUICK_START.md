@@ -14,12 +14,14 @@ Get StreamGuard up and running in under 10 minutes.
 | GCC/Clang | C++17 support | C++ compiler |
 | Java | 17+ | Query API runtime |
 | Maven | 3.8+ | Java build tool |
+| Python | 3.11+ | Spark ML pipeline (optional) |
 
 ### Optional Tools
 
 - `curl` or `httpie` for API testing
 - `jq` for JSON processing
 - Prometheus & Grafana for monitoring
+- Apache Spark for ML pipeline (Python 3.11+ includes PySpark)
 
 ### System Requirements
 
@@ -279,6 +281,116 @@ curl http://localhost:8080/metrics
 
 # Filter for anomaly metrics
 curl -s http://localhost:8080/metrics | grep anomaly
+```
+
+---
+
+## Step 11: Run Spark ML Pipeline (Optional)
+
+The Spark ML pipeline provides batch processing for deep feature engineering and ML-based anomaly detection.
+
+### Setup Python Environment
+
+```bash
+cd ../spark-ml-pipeline
+
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+pip install setuptools  # Required for Python 3.12+
+```
+
+### Run ML Pipeline
+
+```bash
+# Process events with default settings (up to 10K events)
+python src/training_data_generator.py
+
+# Or process specific number of events
+python src/training_data_generator.py --max-events 5000
+
+# Or process from specific Kafka offset
+python src/training_data_generator.py --start-offset earliest --max-events 10000
+```
+
+Expected output:
+```
+[Step 1/5] Reading events from Kafka
+Read 62330 Kafka records
+Parsed 5000 valid security events
+
+[Step 2/5] Extracting behavioral features
+Total features extracted: 31 columns for 15 users
+
+[Step 3/5] Preparing feature vectors
+Selected 28 numeric features for ML
+
+[Step 4/5] Detecting anomalies with ML
+Training Isolation Forest with contamination=0.1
+Detected 2 anomalies (13.33% of users)
+
+[Step 5/5] Exporting training data to Parquet
+Training data exported to: ./output/training_data
+
+Pipeline Complete!
+Total duration: 25.45 seconds
+```
+
+### Verify ML Results
+
+```bash
+# Check output files
+ls -lh output/training_data/
+
+# View anomaly report
+cat output/training_data/anomaly_report.json | jq
+
+# Read Parquet data with Python
+python3 << 'EOF'
+import pandas as pd
+
+# Read partitioned data
+df_anomalous = pd.read_parquet('output/training_data/is_anomaly=1/')
+df_normal = pd.read_parquet('output/training_data/is_anomaly=0/')
+
+print(f"Anomalous users: {len(df_anomalous)}")
+print(f"Normal users: {len(df_normal)}")
+print(f"Total features: {len(df_normal.columns)}")
+print("\nTop anomalies:")
+print(df_anomalous[['user', 'anomaly_score_normalized', 'total_events']].to_string(index=False))
+EOF
+```
+
+Expected output:
+```
+Anomalous users: 2
+Normal users: 13
+Total features: 31
+
+Top anomalies:
+   user  anomaly_score_normalized  total_events
+    bob                  1.000000           172
+  frank                  0.952555           219
+```
+
+### Pipeline Configuration
+
+Edit `config/spark_config.yaml` to customize:
+
+```yaml
+kafka:
+  bootstrap_servers: "localhost:9092"
+  topic: "security-events"
+  group_id: "spark-ml-pipeline"
+
+anomaly_detection:
+  algorithm: "isolation_forest"
+  contamination: 0.1    # Expect 10% anomalies
+  n_estimators: 100     # Number of trees
+  random_state: 42      # Reproducibility
 ```
 
 ---

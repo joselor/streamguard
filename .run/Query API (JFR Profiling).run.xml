@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Query API (JFR Profiling)" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <module name="query-api" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.streamguard.queryapi.QueryApiApplication" />
+    <option name="VM_PARAMETERS" value="-Dspring.profiles.active=dev -XX:StartFlightRecording=filename=$PROJECT_DIR$/out/jfr/query-api.jfr,name=StreamGuardQueryApi,settings=profile -XX:FlightRecorderOptions=stackdepth=256" />
+    <option name="WORKING_DIRECTORY" value="file://$PROJECT_DIR$/query-api" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>
