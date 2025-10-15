@@ -295,6 +295,7 @@ public class QueryService {
         summary.setHighThreatEvents(highThreatEvents);
         summary.setAverageThreatScore(totalEvents > 0 ? totalThreatScore / totalEvents : 0.0);
         summary.setTotalAnalyses(getAnalysisCount());
+        summary.setTotalAnomalies(getAnomalyCount());
 
         return summary;
     }
@@ -498,5 +499,6 @@ public class QueryService {
         private long highThreatEvents;
         private double averageThreatScore;
         private long totalAnalyses;
+        private long totalAnomalies;
     }
 }
