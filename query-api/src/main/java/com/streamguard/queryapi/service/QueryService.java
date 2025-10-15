@@ -53,6 +53,11 @@ public class QueryService {
         try (RocksIterator iterator = rocksDB.newIterator(defaultColumnFamily)) {
             iterator.seekToLast();
 
+            if (!iterator.isValid()) {
+                log.warn("No events found in database - database may be empty or stream-processor not running");
+                return events;
+            }
+
             int count = 0;
             while (iterator.isValid() && count < limit) {
                 try {
@@ -65,6 +70,8 @@ public class QueryService {
                 }
                 iterator.prev();
             }
+
+            log.info("Retrieved {} events (limit: {})", events.size(), limit);
         }
 
         return events;
@@ -122,12 +129,23 @@ public class QueryService {
         List<ThreatAnalysis> analyses = new ArrayList<>();
 
         if (aiAnalysisColumnFamily == null) {
-            log.warn("AI analysis column family not available");
+            log.warn("AI analysis column family not available - this means:");
+            log.warn("  1. Database was created before AI analysis feature was added, OR");
+            log.warn("  2. Stream-processor has not written any AI analyses yet, OR");
+            log.warn("  3. OPENAI_API_KEY is not configured in stream-processor");
+            log.warn("  Solution: Ensure OPENAI_API_KEY is set and restart stream-processor");
             return analyses;
         }
 
         try (RocksIterator iterator = rocksDB.newIterator(aiAnalysisColumnFamily)) {
             iterator.seekToLast();
+
+            if (!iterator.isValid()) {
+                log.warn("AI analysis column family exists but is empty");
+                log.warn("  Check if stream-processor is generating AI analyses");
+                log.warn("  Verify OPENAI_API_KEY is valid and API calls are succeeding");
+                return analyses;
+            }
 
             int count = 0;
             while (iterator.isValid() && count < limit) {
@@ -141,6 +159,8 @@ public class QueryService {
                 }
                 iterator.prev();
             }
+
+            log.info("Retrieved {} AI analyses (limit: {})", analyses.size(), limit);
         }
 
         return analyses;
@@ -286,12 +306,25 @@ public class QueryService {
         List<AnomalyResult> anomalies = new ArrayList<>();
 
         if (anomaliesColumnFamily == null) {
-            log.warn("anomalies column family not available");
+            log.warn("Anomalies column family not available - this means:");
+            log.warn("  1. Database was created before anomaly detection feature was added, OR");
+            log.warn("  2. Stream-processor has not detected any anomalies yet");
+            log.warn("  Solution: Ensure stream-processor is running and processing events");
             return anomalies;
         }
 
         try (RocksIterator iterator = rocksDB.newIterator(anomaliesColumnFamily)) {
             iterator.seekToLast();
+
+            if (!iterator.isValid()) {
+                log.warn("Anomalies column family exists but is empty");
+                log.warn("  Possible reasons:");
+                log.warn("    - Not enough events processed to establish baseline (need {} events)", 100);
+                log.warn("    - No anomalous behavior detected yet (threshold: 0.5)");
+                log.warn("    - Anomaly detection may be disabled in stream-processor");
+                log.warn("  Tip: Lower the threshold or wait for more events to be processed");
+                return anomalies;
+            }
 
             int count = 0;
             while (iterator.isValid() && count < limit) {
@@ -305,6 +338,8 @@ public class QueryService {
                 }
                 iterator.prev();
             }
+
+            log.info("Retrieved {} anomalies (limit: {})", anomalies.size(), limit);
         }
 
         return anomalies;

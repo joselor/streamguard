@@ -24,297 +24,320 @@
 
 > A high-throughput distributed system implementing **Lambda Architecture** for processing and analyzing security events with both real-time and batch capabilities, featuring AI-powered threat analysis and ML-based anomaly detection.
 
-## 🎯 Project Overview
+# StreamGuard: Real-Time Security Event Processing System
 
-StreamGuard demonstrates production-grade **Lambda Architecture**, combining:
-- **Speed Layer** (C++ real-time processor) - Sub-millisecond processing
-- **Batch Layer** (Apache Spark ML pipeline) - Deep analysis & training data generation
-- **Serving Layer** (Java REST API) - Unified query interface
+**A demonstration project built in 2 weeks to showcase distributed systems expertise for a CrowdStrike job application.**
 
-**Key Capabilities:**
-- **12,000+ events/second** real-time processing
-- **Sub-1ms latency** for anomaly detection
-- **Apache Spark** for batch ML training data generation
-- **AI-powered threat analysis** using OpenAI GPT-4
-- **Statistical + ML anomaly detection** (Isolation Forest, K-Means)
-- **Production-ready** with full observability stack
+---
+
+## 📋 About This Project
+
+StreamGuard is a **proof-of-concept demonstration project** built to showcase my ability to quickly master and deliver working software using CrowdStrike's technology stack.
+
+### What It Is ✅
+
+- **Working demonstration** of distributed streaming architecture
+- **Technology showcase** featuring C++, Java, Kafka, RocksDB, Prometheus, Grafana
+- **AI integration example** with statistical anomaly detection and LLM-powered threat analysis
+- **Learning project** completed in 2 weeks to prove rapid skill acquisition
+- **Portfolio piece** demonstrating architectural thinking and polyglot development
+
+### What It's NOT ❌
+
+- **NOT production-ready** enterprise software
+- **NOT optimized** for millions of events/second (demo processes ~10K events/sec)
+- **NOT security-hardened** for real-world deployment
+- **NOT feature-complete** - intentionally scoped for job application demo
+
+### Project Goal 🎯
+
+**Primary objective:** Demonstrate my ability to:
+1. Quickly master CrowdStrike's core technologies (C++, Kafka, RocksDB)
+2. Design and implement distributed systems architecture
+3. Integrate modern AI capabilities practically
+4. Deliver working, documented software under time constraints
+5. Communicate technical decisions clearly
+
+---
+
+## 🏗️ Architecture Overview
+
+StreamGuard implements a streaming event processing pipeline with AI-powered anomaly detection:
+
+```
+Event Generator (Java)
+    ↓
+Apache Kafka (distributed messaging)
+    ↓
+Stream Processor (C++ for performance)
+    ↓
+RocksDB (embedded storage)
+    ↓
+Query API (Java/Spring Boot)
+    ↓
+AI Analysis (Claude 3.5 Sonnet)
+```
+
+**Key Design Decisions:**
+- **C++ for processing**: Performance + RocksDB native integration
+- **Java for generator/API**: Rapid development + mature Kafka client
+- **Statistical anomaly detection**: Simple, explainable, no training data required
+- **AI for narrative generation**: Shows modern capability integration
+
+---
+
+## 🛠️ Technology Stack
+
+### Core Technologies (from CrowdStrike job description)
+- **C++17**: High-performance stream processor with RocksDB integration
+- **Java 17**: Event generator and REST API (Spring Boot)
+- **Apache Kafka**: Distributed event streaming backbone
+- **RocksDB**: Embedded key-value storage for state management
+- **Docker**: Container orchestration for local development
+- **Git**: Version control with clean commit history
+
+### Observability & AI
+- **Prometheus**: Metrics collection and monitoring
+- **Grafana**: Real-time visualization dashboards
+- **Anthropic Claude 3.5 Sonnet**: AI-powered threat narrative generation
+- **Statistical Models**: 5-dimensional anomaly scoring
+
+### Build Tools
+- **CMake 3.20+**: Modern C++ build system
+- **Maven 3.8+**: Java dependency management
+- **Docker Compose**: Multi-container orchestration
+
+---
 
 ## 🚀 Quick Start
 
-### Option 1: Using Startup Scripts (Recommended)
+### Prerequisites
 
 ```bash
-# 1. Copy environment template and configure
-cp .env.example .env
-# Edit .env to set OPENAI_API_KEY and other settings
+# Required
+- Docker Desktop (for Kafka, monitoring stack)
+- Java 17 (for event generator and API)
+- CMake 3.20+ (for C++ processor)
+- Mac M1 compatible environment
 
-# 2. Start infrastructure (Kafka, Zookeeper, Prometheus, Grafana)
-docker-compose up -d
-
-# 3. Build components
-cd stream-processor && mkdir -p build && cd build && cmake .. && make && cd ../..
-cd query-api && mvn clean package && cd ..
-cd event-generator && mvn clean package && cd ..
-
-# 4. Start stream processor
-./scripts/start-stream-processor.sh
-
-# 5. Start query API (in another terminal)
-./scripts/start-query-api.sh
-
-# 6. Generate test events (in another terminal)
-./scripts/start-event-generator.sh
-# Or with custom rate: EVENT_RATE=1000 ./scripts/start-event-generator.sh
-
-# 7. Query the API
-curl http://localhost:8081/api/events?limit=10
-curl http://localhost:8081/api/anomalies/high-score?threshold=0.5
+# Verify installation
+docker --version
+java -version
+cmake --version
 ```
 
-### Option 2: Manual Start
+### Setup & Run
 
 ```bash
-# 1. Start infrastructure
+# 1. Clone repository
+git clone https://github.com/joselor/streamguard.git
+cd streamguard
+
+# 2. Start infrastructure (Kafka, Prometheus, Grafana)
 docker-compose up -d
 
-# 2. Build and start stream processor
-cd stream-processor/build
-cmake .. && make
-./stream-processor --broker localhost:9092 --topic security-events \
-    --group streamguard-processor --db ../../data/events.db
+# 3. Build and start components (using Sprint 5 scripts)
+./scripts/start-event-generator.sh    # Generates test events
+./scripts/start-stream-processor.sh   # Processes events in C++
+./scripts/start-query-api.sh          # REST API for queries
 
-# 3. Build and start query API (in another terminal)
-cd query-api
-mvn clean package
-ROCKSDB_PATH=../data/events.db java -jar target/query-api-1.0.0.jar
+# 4. Verify system is working
+curl "http://localhost:8081/api/events/recent?limit=5" | jq
+curl "http://localhost:8081/api/anomalies/recent?limit=2" | jq
 
-# 4. Generate test events (in another terminal)
-cd event-generator
-mvn clean package
-java -jar target/event-generator-1.0-SNAPSHOT.jar --rate 100
+# 5. Access monitoring
+open http://localhost:3000  # Grafana (admin/admin)
+open http://localhost:8090  # Kafka UI
 ```
 
-**Important:** Both `stream-processor` and `query-api` must use the **same database path**:
-- Default: `./data/events.db` (relative to project root)
-- Override with `ROCKSDB_PATH` environment variable
-- See `.env.example` for configuration options
+For detailed setup instructions, see [docs/final/guides/QUICK_START.md](docs/final/guides/QUICK_START.md)
 
-**Access Points:**
-- **Query API**: http://localhost:8081
-- **Swagger UI**: http://localhost:8081/swagger-ui.html
-- **Prometheus Metrics**: http://localhost:8080/metrics
-- **Prometheus**: http://localhost:9090
-- **Grafana**: http://localhost:3000 (admin/admin)
+---
 
-## 📚 Documentation
+## 📊 Key Features Demonstrated
 
-**Comprehensive documentation with diagrams, guides, and API references:**
+### Distributed Systems
+✅ **Kafka streaming** - Producer/consumer patterns, topic management  
+✅ **Stateful processing** - RocksDB for embedded storage  
+✅ **Polyglot architecture** - C++ for performance, Java for rapid development
 
-### 📖 Main Documentation
-- **[Complete Documentation](docs/final/README.md)** - Start here!
+### Anomaly Detection
+✅ **Statistical scoring** - 5-dimensional behavioral baseline tracking  
+✅ **Real-time detection** - Sub-millisecond anomaly identification  
+✅ **Configurable thresholds** - Tunable sensitivity for different scenarios
 
-### 🗺️ Architecture & Design
-- **[Architecture Deep Dive](docs/final/guides/ARCHITECTURE.md)** - System design, components, data flow
-- **[Component Diagram](docs/final/diagrams/COMPONENT_DIAGRAM.md)** - System architecture overview
-- **[Class Diagrams](docs/final/diagrams/CLASS_DIAGRAMS.md)** - UML diagrams for all modules
-- **[Data Flow Animation](docs/final/diagrams/DATA_FLOW_ANIMATION.md)** - ByteByGo-style visualization
+### AI Integration
+✅ **LLM-powered analysis** - Claude 3.5 Sonnet for threat narratives  
+✅ **Contextual insights** - Natural language security explanations  
+✅ **Graceful degradation** - System works without AI if API unavailable
 
-### 📋 Guides
-- **[Quick Start Guide](docs/final/guides/QUICK_START.md)** - Get running in 10 minutes
-- **[Deployment Guide](docs/final/guides/DEPLOYMENT.md)** - Docker, Kubernetes, AWS
-- **[AI/ML Guide](docs/final/guides/AI_ML.md)** - Anomaly detection & AI integration
-- **[Troubleshooting](docs/final/guides/TROUBLESHOOTING.md)** - Common issues & solutions
+### Observability
+✅ **Prometheus metrics** - Throughput, latency, anomaly rates  
+✅ **Grafana dashboards** - Real-time visualization  
+✅ **Comprehensive logging** - Structured logging for debugging
 
-### 🔌 API Reference
-- **[REST API Documentation](docs/final/api/API_REFERENCE.md)** - Complete endpoint reference
+### Configuration Management (Sprint 5)
+✅ **Single source of truth** - `.env` file for all configuration  
+✅ **Automated startup** - Scripts with path validation  
+✅ **Zero-config deployment** - Just run and go
 
-## 🛠️ Tech Stack
-
-### Speed Layer (Real-Time)
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| **Stream Processor** | C++17 | High-performance event processing |
-| **Message Broker** | Apache Kafka 3.6 | Event streaming |
-| **Storage** | RocksDB 8.9 | Embedded key-value store |
-| **AI Analysis** | OpenAI GPT-4 | Threat intelligence |
-
-### Batch Layer (ML Pipeline)
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| **Processing Engine** | Apache Spark 3.5 | Distributed data processing |
-| **ML Framework** | PySpark + scikit-learn | Feature engineering & anomaly detection |
-| **Language** | Python 3.11+ | Pipeline implementation |
-| **Storage Format** | Apache Parquet | Columnar training data |
-
-### Serving Layer
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| **Query API** | Java 17 / Spring Boot 3.2 | REST API for querying data |
-| **Monitoring** | Prometheus + Grafana | Observability |
-| **Build** | CMake, Maven, pip | Build systems |
-
-## ✨ Key Features
-
-### Real-Time Stream Processing
-- High-throughput Kafka consumer with librdkafka
-- Parallel processing pipeline
-- Configurable consumer groups for horizontal scaling
-
-### AI-Powered Threat Analysis
-- Integration with OpenAI GPT-4 API
-- Natural language threat assessments
-- Severity classification (LOW/MEDIUM/HIGH/CRITICAL)
-- Actionable recommendations
-
-### Statistical Anomaly Detection
-- Per-user behavioral baseline tracking
-- 5-dimensional scoring (time, IP, location, event type, failure rate)
-- Weighted composite anomaly scores
-- Continuous learning (adapts to changing behavior)
-
-### Embedded Storage
-- RocksDB for zero-latency persistence
-- Column family isolation (events, ai_analysis, anomalies, embeddings)
-- Time-ordered keys for efficient range queries
-- Compression for storage efficiency
-
-### Production-Ready Observability
-- Prometheus metrics export
-- Grafana dashboards
-- Structured logging
-- Performance counters and histograms
+---
 
 ## 📁 Project Structure
 
 ```
 streamguard/
-├── stream-processor/       # C++ real-time processor (SPEED LAYER)
-│   ├── src/               # Source files
+├── event-generator/        # Java event producer
+│   ├── src/main/java/     # Event generation logic
+│   └── pom.xml            # Maven dependencies
+├── stream-processor/       # C++ processing engine
 │   ├── include/           # Header files
-│   ├── tests/             # Unit tests
-│   └── CMakeLists.txt     # Build configuration
-│
-├── spark-ml-pipeline/     # Apache Spark ML pipeline (BATCH LAYER) ⭐ NEW
-│   ├── src/               # Python source files
-│   │   ├── kafka_reader.py        # Kafka event reader
-│   │   ├── feature_extractor.py   # Feature engineering
-│   │   ├── anomaly_detector.py    # ML anomaly detection
-│   │   └── training_data_generator.py  # Main orchestrator
-│   ├── config/            # Configuration files
-│   ├── output/            # Training data output (Parquet)
-│   ├── requirements.txt   # Python dependencies
-│   └── README.md          # Pipeline documentation
-│
-├── query-api/             # Java REST API (SERVING LAYER)
-│   ├── src/main/java/     # Source code
-│   └── pom.xml            # Maven configuration
-│
-├── event-generator/       # Event generator (Java)
-│   └── src/main/java/     # Source code
-│
-├── docs/                  # Documentation
-│   ├── final/             # Comprehensive docs (START HERE!)
-│   │   ├── README.md      # Main documentation entry point
-│   │   ├── diagrams/      # UML and architecture diagrams
-│   │   ├── guides/        # Detailed guides
-│   │   └── api/           # API reference
-│   ├── SPARK_INTEGRATION.md       # Spark Lambda Architecture guide ⭐ NEW
-│   ├── SPARK_QUICKSTART.md        # 10-min Spark quick start ⭐ NEW
-│   └── END_TO_END_TESTING.md      # Complete E2E testing guide ⭐ NEW
-│
-├── docker-compose.yml     # Infrastructure setup
-└── README.md              # This file
+│   ├── src/               # Implementation
+│   ├── CMakeLists.txt     # Build configuration
+│   └── build/             # Build artifacts
+├── query-api/             # Java/Spring Boot REST API
+│   └── src/main/java/     # API controllers
+├── scripts/               # Automation scripts (Sprint 5)
+│   ├── start-event-generator.sh
+│   ├── start-stream-processor.sh
+│   └── start-query-api.sh
+├── docs/                  # Comprehensive documentation
+│   ├── final/             # Sprint 3 documentation
+│   └── PROJECT_HANDOFF_SPRINT5.md
+├── docker-compose.yml     # Infrastructure definition
+└── .env.example          # Configuration template
 ```
-
-## 🎯 Use Cases
-
-- **Security Operations Centers (SOC)**: Real-time security event monitoring
-- **Threat Hunting**: Behavioral anomaly detection and investigation
-- **Compliance Monitoring**: Audit trail and security event logging
-- **Incident Response**: AI-assisted threat analysis and recommendations
-
-## 🔧 Requirements
-
-### Development
-- **C++ Compiler**: GCC 9+ or Clang 10+ with C++17 support
-- **Java**: JDK 17+
-- **CMake**: 3.20+
-- **Maven**: 3.8+
-- **Docker**: 20.10+ (for Kafka infrastructure)
-
-### Runtime Dependencies
-- **librdkafka**: Kafka C/C++ library
-- **RocksDB**: 8.x
-- **Prometheus C++ client**
-- **nlohmann/json**: JSON library
-
-## 📊 Performance
-
-| Metric | Value |
-|--------|-------|
-| Throughput | 10,000+ events/second per instance |
-| Latency (p95) | <100ms end-to-end |
-| Latency (p99) | <200ms |
-| Storage | ~500MB per 1M events (compressed) |
-| Memory | ~2-4GB per processor instance |
-| CPU | ~60% utilization at 10K events/sec |
-
-## 🚀 Deployment
-
-StreamGuard supports multiple deployment scenarios:
-
-- **Local Development**: Docker Compose
-- **Production**: Kubernetes with Helm charts
-- **Cloud**: AWS EKS, GCP GKE, Azure AKS
-
-See the **[Deployment Guide](docs/final/guides/DEPLOYMENT.md)** for details.
-
-## 📈 Monitoring
-
-Prometheus metrics exposed on `:8080/metrics`:
-
-- `streamguard_events_processed_total` - Total events processed
-- `streamguard_anomalies_detected_total` - Anomalies detected
-- `streamguard_anomaly_score` - Anomaly score distribution
-- `streamguard_ai_analyses_total` - AI analyses by severity
-- `streamguard_processing_latency_seconds` - Processing latency
-
-## 🧪 Testing
-
-```bash
-# C++ tests
-cd stream-processor/build
-ctest --verbose
-
-# Java tests
-cd query-api
-mvn test
-
-# Integration tests
-./scripts/integration-test.sh
-```
-
-## 🤝 Contributing
-
-This is a demonstration project. For production use, consider:
-- Adding authentication/authorization
-- Implementing rate limiting
-- Setting up CI/CD pipelines
-- Adding more comprehensive test coverage
-- Implementing data retention policies
-
-## 📝 License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-Built as a technical demonstration showcasing:
-- CrowdStrike's technology stack (C++, Kafka, RocksDB)
-- Modern AI integration (OpenAI GPT-4)
-- Production-grade system design patterns
-- Real-time stream processing at scale
 
 ---
 
-**For complete documentation, visit: [docs/final/README.md](docs/final/README.md)**
+## 📖 Documentation
+
+### Getting Started
+- [Quick Start Guide](docs/final/guides/QUICK_START.md) - 10-minute setup
+- [Architecture Overview](docs/final/guides/ARCHITECTURE.md) - System design deep-dive
+- [AI/ML Components](docs/final/guides/AI_ML.md) - Anomaly detection explained
+
+### Reference
+- [API Reference](docs/final/api/API_REFERENCE.md) - Complete REST API documentation
+- [Deployment Guide](docs/final/guides/DEPLOYMENT.md) - Docker, Kubernetes, AWS
+- [Troubleshooting](docs/final/guides/TROUBLESHOOTING.md) - Common issues & solutions
+
+### Diagrams
+- [Component Diagram](docs/final/diagrams/COMPONENT_DIAGRAM.md) - Architecture visualization
+- [Data Flow](docs/final/diagrams/DATA_FLOW_ANIMATION.md) - ByteByGo-style animation
+- [Class Diagrams](docs/final/diagrams/CLASS_DIAGRAMS.md) - UML class structure
+
+---
+
+## 🎯 What This Demonstrates
+
+### Technical Skills
+✅ **Rapid learning**: Mastered RocksDB, Kafka, and C++ integration in 2 weeks  
+✅ **Polyglot development**: Comfortable with C++, Java, and modern tooling  
+✅ **System design**: Architectural decisions with clear trade-off analysis  
+✅ **Modern practices**: Docker, CI/CD-ready, comprehensive documentation
+
+### Leadership & Communication
+✅ **Documentation-first**: 10+ detailed guides with diagrams  
+✅ **Decision transparency**: Documented all major design choices  
+✅ **User-focused**: Clear setup instructions, troubleshooting guides  
+✅ **Growth mindset**: Open about what was learned and what could improve
+
+### Domain Knowledge
+✅ **Security concepts**: Understanding of threat patterns and anomaly detection  
+✅ **Performance awareness**: Latency optimization, throughput considerations  
+✅ **Production thinking**: Monitoring, error handling, graceful degradation
+
+---
+
+## 🔧 Performance Characteristics
+
+**Current Demo Performance:**
+- **Throughput**: ~10,000 events/second (single processor instance)
+- **Latency**: Sub-5ms P99 end-to-end processing time
+- **Anomaly Detection**: <1ms statistical scoring
+- **Storage**: Efficient time-series key design in RocksDB
+
+**Production Scaling Considerations:**
+- Horizontal scaling via Kafka partitions (multiple processor instances)
+- Kubernetes deployment for orchestration
+- Cloud-native configuration management
+- Comprehensive testing (unit, integration, load)
+
+---
+
+## 🤝 Contributing & Feedback
+
+This is a demonstration project for a job application. However, feedback is welcome!
+
+**Areas for Production Enhancement** (if this were real):
+- Comprehensive test suite (unit, integration, load tests)
+- Security hardening (authentication, encryption, secrets management)
+- Horizontal scaling implementation
+- Advanced ML models (beyond statistical scoring)
+- Disaster recovery (replication, backups)
+
+---
+
+## 📜 License
+
+This project is for demonstration purposes as part of a job application to CrowdStrike.
+
+All rights reserved - Jose Ortuno, 2025
+
+---
+
+## 👤 Author
+
+**Jose Ortuno** - Senior Solutions Architect  
+Applying for: Senior Engineering Manager - Streaming Search at CrowdStrike
+
+**Connect:**
+- LinkedIn: [linkedin.com/in/jose-ortuno](https://linkedin.com/in/jose-ortuno)
+- GitHub: [github.com/joselor](https://github.com/joselor)
+- Email: [your-email@example.com]
+
+---
+
+## 🙏 Acknowledgments
+
+**Technologies Used:**
+- Apache Kafka - Distributed streaming platform
+- RocksDB - Embedded storage engine
+- Anthropic Claude - AI-powered analysis
+- Spring Boot - Java API framework
+- Prometheus & Grafana - Observability stack
+
+**Inspiration:**
+- CrowdStrike's approach to security event processing
+- Modern streaming architectures (Kafka, Flink, Spark)
+- AI-augmented security operations
+
+---
+
+## 📝 Project Timeline
+
+**Sprint 1** (Oct 8-9, 2025): Foundation ✅
+- Event generation, Kafka integration, C++ processor, RocksDB storage
+
+**Sprint 2-3** (Oct 10-14, 2025): Features & Monitoring ✅  
+- Anomaly detection, AI integration, Prometheus, Grafana, REST API
+
+**Sprint 4** (Oct 14, 2025): Lambda Architecture ✅  
+- Batch processing layer, comprehensive state management
+
+**Sprint 5** (Oct 14, 2025): Configuration Management ✅  
+- Zero-config deployment, automated startup scripts
+
+**Demo Prep** (Oct 15-16, 2025): Documentation & Demo 📅  
+- Video recording, live demo practice, final polish
+
+---
+
+**Last Updated**: October 15, 2025  
+**Project Status**: Demo-ready 🚀  
+**Next Step**: Record demonstration video
+
+---
+
+> **Note to Reviewers**: This README reflects the honest scope of a 2-week demonstration project. It showcases my ability to quickly deliver working software with unfamiliar technologies, not a claim of production-grade enterprise software. Questions and feedback welcome!

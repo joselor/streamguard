@@ -834,6 +834,80 @@ curl https://api.openai.com/v1/chat/completions \
   -d '{"model":"gpt-4","max_tokens":100,"messages":[{"role":"user","content":"test"}]}'
 ```
 
+### Issue: "API endpoints return empty arrays []"
+
+**Symptoms:**
+```bash
+curl http://localhost:8081/api/events | jq
+# Returns: []
+
+curl http://localhost:8081/api/analyses | jq
+# Returns: []
+
+curl http://localhost:8081/api/anomalies | jq
+# Returns: []
+```
+
+**Solution:**
+
+1. **Check system health:**
+```bash
+curl http://localhost:8081/api/health/status | jq
+```
+
+2. **Common causes and solutions:**
+
+| Empty Endpoint | Likely Cause | Solution |
+|----------------|--------------|----------|
+| `/api/events` | Stream-processor not running | Start: `./scripts/start-stream-processor.sh` |
+| `/api/analyses` | OPENAI_API_KEY not set | Set API key in `.env` and restart |
+| `/api/anomalies` | Not enough events processed | Wait for 100+ events, check threshold |
+
+3. **Check stream-processor logs:**
+```bash
+# Should see column family creation
+# Look for: "Column families: default (events), ai_analysis, embeddings, anomalies"
+```
+
+4. **Check query-api logs:**
+```bash
+# Look for warnings like:
+# "AI analysis column family not available"
+# "Anomalies column family exists but is empty"
+# "OPENAI_API_KEY is not configured"
+```
+
+5. **Verify database exists and has data:**
+```bash
+ls -la ./data/events.db/
+# Should see CURRENT, MANIFEST-*, *.sst files
+
+# Check event count
+curl http://localhost:8081/api/events/count
+# Should return > 0
+```
+
+6. **For AI analyses specifically:**
+```bash
+# Ensure OPENAI_API_KEY is set (NOT "sk-test-dummy")
+grep OPENAI_API_KEY .env
+
+# Restart stream-processor after setting API key
+pkill -f stream-processor
+./scripts/start-stream-processor.sh
+```
+
+7. **For anomalies specifically:**
+```bash
+# Check if enough events processed for baseline
+curl http://localhost:8081/api/events/count
+# Need 100+ events
+
+# Check anomaly threshold (default: 0.5)
+# If too high, no anomalies will be detected
+# Consider lowering threshold in stream-processor/src/anomaly_detector.cpp
+```
+
 ---
 
 ## Next Steps

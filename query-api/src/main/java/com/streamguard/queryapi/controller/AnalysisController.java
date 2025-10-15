@@ -72,4 +72,13 @@ public class AnalysisController {
         long count = queryService.getAnalysisCount();
         return ResponseEntity.ok(count);
     }
+
+    @GetMapping("/recent")
+    @Operation(summary = "Get recent threat analyses", description = "Returns the most recent AI threat analyses (alias for GET /api/analyses)")
+    public ResponseEntity<List<ThreatAnalysis>> getRecentAnalyses(
+            @Parameter(description = "Maximum number of analyses to return", example = "100")
+            @RequestParam(defaultValue = "100") int limit) {
+        List<ThreatAnalysis> analyses = queryService.getLatestAnalyses(limit);
+        return ResponseEntity.ok(analyses);
+    }
 }

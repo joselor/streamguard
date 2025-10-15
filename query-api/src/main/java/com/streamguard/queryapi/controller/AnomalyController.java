@@ -84,4 +84,13 @@ public class AnomalyController {
         List<AnomalyResult> anomalies = queryService.getAnomaliesByTimeRange(startTime, endTime, limit);
         return ResponseEntity.ok(anomalies);
     }
+
+    @GetMapping("/recent")
+    @Operation(summary = "Get recent anomalies", description = "Returns the most recent detected anomalies (alias for GET /api/anomalies)")
+    public ResponseEntity<List<AnomalyResult>> getRecentAnomalies(
+            @Parameter(description = "Maximum number of anomalies to return", example = "100")
+            @RequestParam(defaultValue = "100") int limit) {
+        List<AnomalyResult> anomalies = queryService.getLatestAnomalies(limit);
+        return ResponseEntity.ok(anomalies);
+    }
 }

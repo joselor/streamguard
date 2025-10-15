@@ -146,6 +146,14 @@ GET /anomalies/time-range?start_time={start}&end_time={end}&limit={limit}
 GET /anomalies/count
 ```
 
+### Get Recent Anomalies
+
+```http
+GET /anomalies/recent?limit={limit}
+```
+
+**Note:** Alias for `GET /anomalies` for consistency with other endpoints.
+
 ---
 
 ## Analyses API
@@ -191,6 +199,14 @@ GET /analyses/severity/{severity}?limit={limit}
 GET /analyses/count
 ```
 
+### Get Recent Analyses
+
+```http
+GET /analyses/recent?limit={limit}
+```
+
+**Note:** Alias for `GET /analyses` for consistency with other endpoints.
+
 ---
 
 ## Statistics API
@@ -211,6 +227,60 @@ GET /stats/summary
   "totalAnomalies": 8542
 }
 ```
+
+---
+
+## Health & Status API
+
+### Basic Health Check
+
+```http
+GET /health
+```
+
+**Response:**
+```json
+{
+  "status": "UP",
+  "timestamp": 1696723200000
+}
+```
+
+### Detailed System Status
+
+```http
+GET /health/status
+```
+
+**Response:**
+```json
+{
+  "status": "UP",
+  "timestamp": 1696723200000,
+  "database": {
+    "connected": true,
+    "eventCount": 125000,
+    "anomalyCount": 1250,
+    "analysisCount": 5000
+  },
+  "features": {
+    "eventsAvailable": true,
+    "anomalyDetectionAvailable": true,
+    "aiAnalysisAvailable": true
+  },
+  "warnings": {
+    "aiAnalysis": "No AI analyses found - check OPENAI_API_KEY configuration"
+  }
+}
+```
+
+### Readiness Check
+
+```http
+GET /health/ready
+```
+
+Returns 200 if system is ready, 503 if not ready.
 
 ---
 
@@ -310,3 +380,70 @@ fetch(`${BASE_URL}/events?limit=10`)
     });
   });
 ```
+
+---
+
+## Troubleshooting Empty Results
+
+If endpoints return empty arrays `[]`, check the system status:
+
+```bash
+# Check system health
+curl http://localhost:8081/api/health/status | jq
+
+# Expected response:
+{
+  "status": "UP",
+  "database": {
+    "eventCount": 12500,      # Should be > 0
+    "anomalyCount": 125,      # Will be 0 until anomalies detected
+    "analysisCount": 250      # Will be 0 if OPENAI_API_KEY not set
+  },
+  "features": {
+    "eventsAvailable": true,
+    "anomalyDetectionAvailable": true,
+    "aiAnalysisAvailable": true
+  }
+}
+```
+
+### Common Issues
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| `/api/events` returns `[]` | Stream-processor not running or not connected to database | Start stream-processor: `./scripts/start-stream-processor.sh` |
+| `/api/analyses` returns `[]` | OPENAI_API_KEY not configured | Set `OPENAI_API_KEY` in `.env` and restart stream-processor |
+| `/api/anomalies` returns `[]` | Not enough events or no anomalies detected | Wait for 100+ events, or lower threshold in anomaly_detector.cpp |
+| `/api/analyses/count` returns `0` | AI analysis column family not created | Check query-api logs for warnings about column families |
+
+### Debug Steps
+
+1. **Check if stream-processor is running:**
+   ```bash
+   ps aux | grep stream-processor
+   ```
+
+2. **Check stream-processor logs:**
+   ```bash
+   # Look for "EventStore" messages about column families
+   # Should see: "Column families: default (events), ai_analysis, embeddings, anomalies"
+   ```
+
+3. **Check query-api logs:**
+   ```bash
+   # Look for warnings like:
+   # "AI analysis column family not available"
+   # "OPENAI_API_KEY is not configured"
+   ```
+
+4. **Verify database exists:**
+   ```bash
+   ls -la ./data/events.db/
+   # Should see CURRENT, MANIFEST, *.sst files
+   ```
+
+5. **Check OPENAI_API_KEY:**
+   ```bash
+   grep OPENAI_API_KEY .env
+   # Should NOT be empty or "sk-test-dummy"
+   ```
