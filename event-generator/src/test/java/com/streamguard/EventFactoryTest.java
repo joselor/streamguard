@@ -32,7 +32,7 @@ class EventFactoryTest {
 
     @Test
     void testGenerateAuthEvent() {
-        AuthEvent event = factory.generateAuthEvent();
+        AuthEvent event = factory.generateAuthEvent(false);
 
         assertNotNull(event, "AuthEvent should not be null");
         assertNotNull(event.getEventId(), "Event ID should not be null");
@@ -48,7 +48,7 @@ class EventFactoryTest {
 
     @Test
     void testGenerateNetworkEvent() {
-        NetworkEvent event = factory.generateNetworkEvent();
+        NetworkEvent event = factory.generateNetworkEvent(false);
 
         assertNotNull(event, "NetworkEvent should not be null");
         assertNotNull(event.getEventId(), "Event ID should not be null");
@@ -65,7 +65,7 @@ class EventFactoryTest {
 
     @Test
     void testGenerateFileEvent() {
-        FileEvent event = factory.generateFileEvent();
+        FileEvent event = factory.generateFileEvent(false);
 
         assertNotNull(event, "FileEvent should not be null");
         assertNotNull(event.getEventId(), "Event ID should not be null");
@@ -80,7 +80,7 @@ class EventFactoryTest {
 
     @Test
     void testGenerateProcessEvent() {
-        ProcessEvent event = factory.generateProcessEvent();
+        ProcessEvent event = factory.generateProcessEvent(false);
 
         assertNotNull(event, "ProcessEvent should not be null");
         assertNotNull(event.getEventId(), "Event ID should not be null");
@@ -96,7 +96,7 @@ class EventFactoryTest {
 
     @Test
     void testGenerateDnsEvent() {
-        DnsEvent event = factory.generateDnsEvent();
+        DnsEvent event = factory.generateDnsEvent(false);
 
         assertNotNull(event, "DnsEvent should not be null");
         assertNotNull(event.getEventId(), "Event ID should not be null");
@@ -164,11 +164,11 @@ class EventFactoryTest {
     void testJsonSerialization() throws Exception {
         // Test that all event types can be serialized to JSON
         Event[] events = {
-            factory.generateAuthEvent(),
-            factory.generateNetworkEvent(),
-            factory.generateFileEvent(),
-            factory.generateProcessEvent(),
-            factory.generateDnsEvent()
+            factory.generateAuthEvent(false),
+            factory.generateNetworkEvent(false),
+            factory.generateFileEvent(false),
+            factory.generateProcessEvent(false),
+            factory.generateDnsEvent(false)
         };
 
         for (Event event : events) {
