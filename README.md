@@ -35,30 +35,69 @@ StreamGuard demonstrates production-grade **Lambda Architecture**, combining:
 - **12,000+ events/second** real-time processing
 - **Sub-1ms latency** for anomaly detection
 - **Apache Spark** for batch ML training data generation
-- **AI-powered threat analysis** using Anthropic Claude
+- **AI-powered threat analysis** using OpenAI GPT-4
 - **Statistical + ML anomaly detection** (Isolation Forest, K-Means)
 - **Production-ready** with full observability stack
 
 ## 🚀 Quick Start
 
+### Option 1: Using Startup Scripts (Recommended)
+
 ```bash
-# 1. Start infrastructure (Kafka, Zookeeper)
+# 1. Copy environment template and configure
+cp .env.example .env
+# Edit .env to set OPENAI_API_KEY and other settings
+
+# 2. Start infrastructure (Kafka, Zookeeper, Prometheus, Grafana)
 docker-compose up -d
 
-# 2. Build stream processor
+# 3. Build components
+cd stream-processor && mkdir -p build && cd build && cmake .. && make && cd ../..
+cd query-api && mvn clean package && cd ..
+cd event-generator && mvn clean package && cd ..
+
+# 4. Start stream processor
+./scripts/start-stream-processor.sh
+
+# 5. Start query API (in another terminal)
+./scripts/start-query-api.sh
+
+# 6. Generate test events (in another terminal)
+./scripts/start-event-generator.sh
+# Or with custom rate: EVENT_RATE=1000 ./scripts/start-event-generator.sh
+
+# 7. Query the API
+curl http://localhost:8081/api/events?limit=10
+curl http://localhost:8081/api/anomalies/high-score?threshold=0.5
+```
+
+### Option 2: Manual Start
+
+```bash
+# 1. Start infrastructure
+docker-compose up -d
+
+# 2. Build and start stream processor
 cd stream-processor/build
 cmake .. && make
-./stream-processor --broker localhost:9092 --topic security-events --group streamguard-processor
+./stream-processor --broker localhost:9092 --topic security-events \
+    --group streamguard-processor --db ../../data/events.db
 
-# 3. Build and start query API
-cd ../../query-api
+# 3. Build and start query API (in another terminal)
+cd query-api
 mvn clean package
-ROCKSDB_PATH=../stream-processor/build/data/events.db java -jar target/query-api-1.0.0.jar
+ROCKSDB_PATH=../data/events.db java -jar target/query-api-1.0.0.jar
 
-# 4. Query the API
-curl http://localhost:8081/api/events?limit=10
-curl http://localhost:8081/api/anomalies/high-score?threshold=0.7
+# 4. Generate test events (in another terminal)
+cd event-generator
+mvn clean package
+java -jar target/event-generator-1.0-SNAPSHOT.jar --rate 100
 ```
+
+**Important:** Both `stream-processor` and `query-api` must use the **same database path**:
+- Default: `./data/events.db` (relative to project root)
+- Override with `ROCKSDB_PATH` environment variable
+- See `.env.example` for configuration options
 
 **Access Points:**
 - **Query API**: http://localhost:8081
@@ -97,7 +136,7 @@ curl http://localhost:8081/api/anomalies/high-score?threshold=0.7
 | **Stream Processor** | C++17 | High-performance event processing |
 | **Message Broker** | Apache Kafka 3.6 | Event streaming |
 | **Storage** | RocksDB 8.9 | Embedded key-value store |
-| **AI Analysis** | Anthropic Claude 3.5 Sonnet | Threat intelligence |
+| **AI Analysis** | OpenAI GPT-4 | Threat intelligence |
 
 ### Batch Layer (ML Pipeline)
 | Component | Technology | Purpose |
@@ -122,7 +161,7 @@ curl http://localhost:8081/api/anomalies/high-score?threshold=0.7
 - Configurable consumer groups for horizontal scaling
 
 ### AI-Powered Threat Analysis
-- Integration with Anthropic Claude API
+- Integration with OpenAI GPT-4 API
 - Natural language threat assessments
 - Severity classification (LOW/MEDIUM/HIGH/CRITICAL)
 - Actionable recommendations
@@ -272,7 +311,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 Built as a technical demonstration showcasing:
 - CrowdStrike's technology stack (C++, Kafka, RocksDB)
-- Modern AI integration (Anthropic Claude)
+- Modern AI integration (OpenAI GPT-4)
 - Production-grade system design patterns
 - Real-time stream processing at scale
 

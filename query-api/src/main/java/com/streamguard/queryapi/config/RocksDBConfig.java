@@ -37,7 +37,7 @@ public class RocksDBConfig {
         // List existing column families
         List<byte[]> cfNames;
         try (Options options = new Options()) {
-            cfNames = RocksDB.listColumnFamilies(options, dbPath);
+            cfNames = new ArrayList<>(RocksDB.listColumnFamilies(options, dbPath));
         }
 
         if (cfNames.isEmpty()) {

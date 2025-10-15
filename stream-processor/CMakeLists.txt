@@ -170,6 +170,7 @@ target_link_libraries(test-embeddings
 if(GTest_FOUND)
     enable_testing()
 
+    # Event tests
     add_executable(event-tests
         test/event-test.cpp
     )
@@ -182,7 +183,43 @@ if(GTest_FOUND)
 
     add_test(NAME EventTests COMMAND event-tests)
 
-    message(STATUS "Google Test found - building tests")
+    # Anomaly detector tests
+    add_executable(anomaly-detector-tests
+        test/anomaly_detector_test.cpp
+    )
+
+    target_link_libraries(anomaly-detector-tests
+        streamguard_anomaly
+        streamguard_event
+        nlohmann_json::nlohmann_json
+        GTest::gtest
+        GTest::gtest_main
+        pthread
+    )
+
+    add_test(NAME AnomalyDetectorTests COMMAND anomaly-detector-tests)
+
+    # Event store tests
+    add_executable(event-store-tests
+        test/event_store_test.cpp
+    )
+
+    target_link_libraries(event-store-tests
+        streamguard_store
+        streamguard_anomaly
+        streamguard_ai
+        streamguard_event
+        RocksDB::rocksdb
+        CURL::libcurl
+        nlohmann_json::nlohmann_json
+        GTest::gtest
+        GTest::gtest_main
+        pthread
+    )
+
+    add_test(NAME EventStoreTests COMMAND event-store-tests)
+
+    message(STATUS "Google Test found - building 3 test suites")
 else()
     message(STATUS "Google Test not found - skipping tests")
 endif()

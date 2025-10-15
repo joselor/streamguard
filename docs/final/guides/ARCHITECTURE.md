@@ -25,7 +25,7 @@ StreamGuard is a real-time security event processing and analysis platform desig
 - **Horizontal Scalability**: Kafka consumer groups enable multi-instance deployment
 - **Data Durability**: Persistent storage with RocksDB
 - **Observability**: Comprehensive Prometheus metrics
-- **AI Integration**: Seamless integration with Anthropic Claude
+- **AI Integration**: Seamless integration with OpenAI GPT-4
 
 ---
 
@@ -89,7 +89,7 @@ graph TB
 **Key Components**:
 - Kafka consumer for event ingestion
 - Statistical anomaly detector (5-dimensional scoring)
-- AI analyzer (Anthropic Claude integration)
+- AI analyzer (OpenAI GPT-4 integration)
 - RocksDB for persistent storage
 - Prometheus metrics export
 
@@ -333,7 +333,7 @@ class AnomalyDetector {
 private:
     std::map<std::string, UserBaseline> baselines_;  // Per-user baselines
     size_t min_events_for_baseline_;                 // Learning threshold (100)
-    double threshold_;                               // Anomaly threshold (0.7)
+    double threshold_;                               // Anomaly threshold (0.5)
     std::mutex mutex_;                               // Thread safety
 
     struct UserBaseline {
@@ -383,9 +383,18 @@ private:
    );
    ```
 
-3. **Continuous Learning**:
-   - Baselines updated after each event
-   - Adapts to evolving user behavior
+3. **Selective Baseline Updates** (Prevents Baseline Poisoning):
+   ```cpp
+   // Only update baseline with "normal" events
+   if (anomaly_score < threshold_) {
+       baseline.update(event);  // Accept as normal behavior
+   }
+   // Anomalous events are rejected from baseline updates
+   // This prevents attackers from poisoning the baseline
+   ```
+   - Baselines updated only with normal events (score < 0.5)
+   - Adapts to genuine behavioral changes
+   - Rejects suspicious patterns from contaminating the baseline
    - No manual retraining required
 
 **Performance:**
@@ -405,7 +414,7 @@ private:
 class AIAnalyzer {
 private:
     std::string api_key_;
-    std::string model_name_;         // "claude-3-5-sonnet-20241022"
+    std::string model_name_;         // "gpt-4" or "gpt-4-turbo"
     httplib::Client* http_client_;
     int timeout_ms_;                 // 5000ms default
     int max_retries_;                // 3 retries
@@ -451,11 +460,10 @@ std::string AIAnalyzer::buildPrompt(const Event& event,
 **API Integration:**
 
 ```cpp
-// HTTP POST to Claude API
+// HTTP POST to OpenAI API
 httplib::Headers headers = {
     {"Content-Type", "application/json"},
-    {"x-api-key", api_key_},
-    {"anthropic-version", "2023-06-01"}
+    {"Authorization", "Bearer " + api_key_}
 };
 
 json request_body = {
@@ -467,7 +475,7 @@ json request_body = {
     }}}
 };
 
-auto response = http_client_->Post("/v1/messages",
+auto response = http_client_->Post("/v1/chat/completions",
                                    headers,
                                    request_body.dump(),
                                    "application/json");
@@ -638,10 +646,10 @@ auto start = std::chrono::steady_clock::now();
 
 // Process event
 auto anomaly = anomaly_detector.analyze(event);
-if (anomaly && anomaly->anomaly_score >= 0.7) {
+if (anomaly && anomaly->anomaly_score >= 0.5) {
     std::string score_range = anomaly->anomaly_score >= 0.9 ? "critical" :
-                             anomaly->anomaly_score >= 0.8 ? "high" :
-                             anomaly->anomaly_score >= 0.7 ? "medium" : "low";
+                             anomaly->anomaly_score >= 0.7 ? "high" :
+                             anomaly->anomaly_score >= 0.5 ? "medium" : "low";
 
     metrics.incrementAnomaliesDetected(anomaly->user, score_range);
     metrics.recordAnomalyScore(anomaly->anomaly_score);
@@ -794,7 +802,7 @@ public class AnomalyController {
     @Operation(summary = "Get high-score anomalies")
     public ResponseEntity<List<AnomalyResult>> getHighScoreAnomalies(
         @Parameter(description = "Minimum anomaly score (0.0-1.0)")
-        @RequestParam(name = "threshold", defaultValue = "0.7") double threshold,
+        @RequestParam(name = "threshold", defaultValue = "0.5") double threshold,
         @RequestParam(defaultValue = "100") int limit) {
 
         List<AnomalyResult> anomalies =
@@ -1032,7 +1040,7 @@ class TrainingDataPipeline:
   "event_id": "evt_1696723200_001",
   "user": "alice",
   "timestamp": 1696723200000,
-  "anomaly_score": 0.73,
+  "anomaly_score": 0.82,
   "time_anomaly": 0.15,
   "ip_anomaly": 0.98,
   "location_anomaly": 0.08,

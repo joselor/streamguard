@@ -41,7 +41,41 @@ cd streamguard
 
 ---
 
-## Step 2: Start Infrastructure
+## Step 2: Configure Environment
+
+Copy the environment template and configure:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` to set your configuration:
+
+```bash
+# StreamGuard Environment Configuration
+
+# RocksDB Database Path (both components use this path)
+ROCKSDB_PATH=./data/events.db
+
+# Kafka Configuration
+KAFKA_BROKER=localhost:9092
+KAFKA_TOPIC=security-events
+KAFKA_GROUP_ID=streamguard-processor
+
+# OpenAI API Configuration
+OPENAI_API_KEY=sk-your-api-key-here
+OPENAI_MODEL=gpt-4o-mini
+
+# Metrics & Monitoring
+STREAM_PROCESSOR_METRICS_PORT=8080
+QUERY_API_PORT=8081
+```
+
+**Important:** Set `OPENAI_API_KEY` to your actual OpenAI API key.
+
+---
+
+## Step 3: Start Infrastructure
 
 Start Kafka and Zookeeper using Docker Compose:
 
@@ -57,9 +91,11 @@ docker-compose ps
 
 Expected output:
 ```
-NAME                IMAGE               STATUS
-streamguard-kafka   wurstmeister/kafka  Up
-streamguard-zk      zookeeper:3.8       Up
+NAME                       IMAGE                         STATUS
+streamguard-kafka          confluentinc/cp-kafka:7.5.0   Up
+streamguard-zookeeper      confluentinc/cp-zookeeper     Up
+streamguard-prometheus     prom/prometheus               Up
+streamguard-grafana        grafana/grafana               Up
 ```
 
 Wait 30 seconds for Kafka to be fully ready:
@@ -110,12 +146,31 @@ ls -lh target/query-api-1.0.0.jar
 
 ---
 
-## Step 5: Configure Anthropic API Key
+## Step 5: Build Event Generator
+
+```bash
+cd ../event-generator
+
+# Clean and package
+mvn clean package -DskipTests
+
+# Verify JAR file
+ls -lh target/event-generator-1.0-SNAPSHOT.jar
+```
+
+Expected output:
+```
+-rw-r--r-- 1 user staff 16M Oct 14 15:02 target/event-generator-1.0-SNAPSHOT.jar
+```
+
+---
+
+## Step 6: Configure OpenAI API Key
 
 **Option A: Environment Variable**
 
 ```bash
-export ANTHROPIC_API_KEY="sk-ant-api03-..."
+export OPENAI_API_KEY="sk-..."
 ```
 
 **Option B: Configuration File**
@@ -124,14 +179,14 @@ Create `stream-processor/build/config.json`:
 
 ```json
 {
-  "anthropic_api_key": "sk-ant-api03-...",
-  "model": "claude-3-5-sonnet-20241022"
+  "openai_api_key": "sk-...",
+  "model": "gpt-4"
 }
 ```
 
 ---
 
-## Step 6: Start Stream Processor
+## Step 7: Start Stream Processor
 
 ```bash
 cd stream-processor/build
@@ -164,7 +219,7 @@ Expected output:
 
 ---
 
-## Step 7: Start Query API
+## Step 8: Start Query API
 
 Open a new terminal:
 
@@ -197,63 +252,72 @@ API available at: http://localhost:8081
 
 ---
 
-## Step 8: Send Test Events
+## Step 9: Generate Test Events
 
-Open a new terminal and send sample security events:
+Open a new terminal and start the event generator:
+
+### Option A: Using Startup Script (Recommended)
 
 ```bash
-# Create sample event
-cat > event.json << 'EOF'
-{
-  "event_id": "evt_$(date +%s)_001",
-  "user": "alice",
-  "timestamp": $(date +%s)000,
-  "type": "LOGIN_SUCCESS",
-  "source_ip": "10.0.1.100",
-  "geo_location": "San Francisco, CA",
-  "threat_score": 0.15,
-  "metadata": {
-    "user_agent": "Mozilla/5.0",
-    "endpoint": "/api/login"
-  }
-}
-EOF
+# Use default rate (100 events/sec, unlimited duration)
+./scripts/start-event-generator.sh
 
-# Send to Kafka using Docker
-docker exec -i streamguard-kafka kafka-console-producer.sh \
-  --broker-list localhost:9092 \
-  --topic security-events < event.json
+# Or with custom configuration
+EVENT_RATE=1000 EVENT_DURATION=60 ./scripts/start-event-generator.sh
+```
 
-# Or use Python producer
-python3 << 'EOF'
-from kafka import KafkaProducer
-import json
-import time
+Expected output:
+```
+[Startup] Loading configuration from .env...
+[Startup] Configuration:
+  - Kafka broker: localhost:9092
+  - Topic: security-events
+  - Event rate: 100 events/sec
+  - Duration: unlimited (Ctrl+C to stop)
+[Startup] Starting event generator...
 
-producer = KafkaProducer(
-    bootstrap_servers=['localhost:9092'],
-    value_serializer=lambda v: json.dumps(v).encode('utf-8')
-)
+=== StreamGuard Event Generator Starting ===
+Target rate: 100 events/second
+Kafka topic: security-events
+Duration: 0 seconds (0 = unlimited)
+===========================================
 
-event = {
-    "event_id": f"evt_{int(time.time())}_001",
-    "user": "alice",
-    "timestamp": int(time.time() * 1000),
-    "type": "LOGIN_SUCCESS",
-    "source_ip": "10.0.1.100",
-    "geo_location": "San Francisco, CA",
-    "threat_score": 0.15
-}
+Events sent: 1000 | Rate: 100.2 events/sec | Errors: 0
+Events sent: 2000 | Rate: 99.8 events/sec | Errors: 0
+...
+```
 
-producer.send('security-events', event)
-producer.flush()
-print("Event sent successfully")
-EOF
+### Option B: Manual Start
+
+```bash
+cd event-generator
+
+# Build if not already built
+mvn clean package
+
+# Run with default settings (100 events/sec)
+java -jar target/event-generator-1.0-SNAPSHOT.jar
+
+# Or with custom rate and duration
+java -jar target/event-generator-1.0-SNAPSHOT.jar \
+  --rate 1000 \
+  --duration 60 \
+  --broker localhost:9092 \
+  --topic security-events
+```
+
+**Event Generator Options:**
+```
+--rate <num>       Events per second (default: 100, max: 50000)
+--broker <addr>    Kafka bootstrap servers (default: localhost:9092)
+--topic <name>     Kafka topic (default: security-events)
+--duration <sec>   Run duration in seconds (default: unlimited)
+--help, -h         Show help message
 ```
 
 ---
 
-## Step 9: Query Events
+## Step 10: Query Events
 
 Query the API using curl:
 
@@ -273,7 +337,7 @@ curl http://localhost:8081/api/stats/summary | jq
 
 ---
 
-## Step 10: View Metrics
+## Step 11: View Metrics
 
 ```bash
 # Prometheus metrics
@@ -285,7 +349,7 @@ curl -s http://localhost:8080/metrics | grep anomaly
 
 ---
 
-## Step 11: Run Spark ML Pipeline (Optional)
+## Step 12: Run Spark ML Pipeline (Optional)
 
 The Spark ML pipeline provides batch processing for deep feature engineering and ML-based anomaly detection.
 
@@ -400,15 +464,19 @@ anomaly_detection:
 ### Generate Realistic Test Data
 
 ```bash
-cd scripts
+# Option 1: Using startup script (recommended)
+./scripts/start-event-generator.sh
 
-# Run test data generator
-python3 generate_test_data.py \
+# Option 2: With custom configuration
+EVENT_RATE=1000 EVENT_DURATION=30 ./scripts/start-event-generator.sh
+
+# Option 3: Manual start with specific parameters
+cd event-generator
+java -jar target/event-generator-1.0-SNAPSHOT.jar \
+  --rate 1000 \
+  --duration 30 \
   --broker localhost:9092 \
-  --topic security-events \
-  --users 10 \
-  --events 1000 \
-  --rate 100
+  --topic security-events
 ```
 
 ### Verify Processing
@@ -501,6 +569,214 @@ docker-compose down -v
 
 ---
 
+## Nuclear Deep Cleanup
+
+If you need to completely reset StreamGuard to a clean state (useful for troubleshooting or starting fresh):
+
+### Quick Cleanup Script
+
+```bash
+#!/bin/bash
+# Nuclear cleanup script - removes ALL StreamGuard data and artifacts
+
+echo "🧹 Starting StreamGuard Nuclear Cleanup..."
+echo "⚠️  WARNING: This will delete ALL data, builds, and Docker volumes!"
+read -p "Are you sure? (yes/no): " confirm
+
+if [ "$confirm" != "yes" ]; then
+    echo "Cleanup cancelled."
+    exit 0
+fi
+
+# Stop all running processes
+echo "[1/8] Stopping running processes..."
+pkill -f stream-processor
+pkill -f query-api
+sleep 2
+
+# Stop and remove Docker containers
+echo "[2/8] Stopping Docker containers..."
+docker-compose down -v 2>/dev/null || true
+
+# Remove Docker volumes
+echo "[3/8] Removing Docker volumes..."
+docker volume rm streamguard_kafka-data 2>/dev/null || true
+docker volume rm streamguard_zookeeper-data 2>/dev/null || true
+docker volume rm streamguard_zookeeper-logs 2>/dev/null || true
+docker volume rm streamguard_prometheus-data 2>/dev/null || true
+docker volume rm streamguard_grafana-data 2>/dev/null || true
+docker volume rm streamguard_spark-data 2>/dev/null || true
+
+# Remove RocksDB database
+echo "[4/8] Removing RocksDB database..."
+rm -rf data/events.db
+rm -rf stream-processor/build/data
+
+# Remove C++ build artifacts
+echo "[5/8] Removing C++ build artifacts..."
+rm -rf stream-processor/build
+rm -rf stream-processor/cmake-build-debug
+rm -rf stream-processor/cmake-build-release
+
+# Remove Java build artifacts
+echo "[6/8] Removing Java build artifacts..."
+rm -rf query-api/target
+rm -rf event-generator/target
+
+# Remove Spark output
+echo "[7/8] Removing Spark ML pipeline output..."
+rm -rf spark-ml-pipeline/output
+rm -rf spark-ml-pipeline/venv
+rm -rf spark-ml-pipeline/__pycache__
+rm -rf spark-ml-pipeline/src/__pycache__
+
+# Remove logs and temporary files
+echo "[8/8] Removing logs and temporary files..."
+rm -rf logs/
+rm -f *.log
+
+echo "✅ Nuclear cleanup complete!"
+echo ""
+echo "To start fresh:"
+echo "  1. cp .env.example .env"
+echo "  2. docker-compose up -d"
+echo "  3. Build and start components"
+```
+
+### Save as Cleanup Script
+
+Save the above as `scripts/nuclear-cleanup.sh`:
+
+```bash
+# Create the script
+cat > scripts/nuclear-cleanup.sh << 'EOF'
+#!/bin/bash
+# Nuclear cleanup script - removes ALL StreamGuard data and artifacts
+
+echo "🧹 Starting StreamGuard Nuclear Cleanup..."
+echo "⚠️  WARNING: This will delete ALL data, builds, and Docker volumes!"
+read -p "Are you sure? (yes/no): " confirm
+
+if [ "$confirm" != "yes" ]; then
+    echo "Cleanup cancelled."
+    exit 0
+fi
+
+# Stop all running processes
+echo "[1/8] Stopping running processes..."
+pkill -f stream-processor
+pkill -f query-api
+sleep 2
+
+# Stop and remove Docker containers
+echo "[2/8] Stopping Docker containers..."
+docker-compose down -v 2>/dev/null || true
+
+# Remove Docker volumes
+echo "[3/8] Removing Docker volumes..."
+docker volume rm streamguard_kafka-data 2>/dev/null || true
+docker volume rm streamguard_zookeeper-data 2>/dev/null || true
+docker volume rm streamguard_zookeeper-logs 2>/dev/null || true
+docker volume rm streamguard_prometheus-data 2>/dev/null || true
+docker volume rm streamguard_grafana-data 2>/dev/null || true
+docker volume rm streamguard_spark-data 2>/dev/null || true
+
+# Remove RocksDB database
+echo "[4/8] Removing RocksDB database..."
+rm -rf data/events.db
+rm -rf stream-processor/build/data
+
+# Remove C++ build artifacts
+echo "[5/8] Removing C++ build artifacts..."
+rm -rf stream-processor/build
+rm -rf stream-processor/cmake-build-debug
+rm -rf stream-processor/cmake-build-release
+
+# Remove Java build artifacts
+echo "[6/8] Removing Java build artifacts..."
+rm -rf query-api/target
+rm -rf event-generator/target
+
+# Remove Spark output
+echo "[7/8] Removing Spark ML pipeline output..."
+rm -rf spark-ml-pipeline/output
+rm -rf spark-ml-pipeline/venv
+rm -rf spark-ml-pipeline/__pycache__
+rm -rf spark-ml-pipeline/src/__pycache__
+
+# Remove logs and temporary files
+echo "[8/8] Removing logs and temporary files..."
+rm -rf logs/
+rm -f *.log
+
+echo "✅ Nuclear cleanup complete!"
+echo ""
+echo "To start fresh:"
+echo "  1. cp .env.example .env"
+echo "  2. docker-compose up -d"
+echo "  3. Build and start components"
+EOF
+
+# Make executable
+chmod +x scripts/nuclear-cleanup.sh
+```
+
+### Run the Cleanup
+
+```bash
+./scripts/nuclear-cleanup.sh
+```
+
+### Manual Cleanup Steps
+
+If you prefer manual cleanup:
+
+```bash
+# 1. Stop all processes
+pkill -f stream-processor
+pkill -f query-api
+
+# 2. Stop Docker containers and remove volumes
+docker-compose down -v
+
+# 3. Remove all Docker volumes
+docker volume prune -f
+
+# 4. Remove database
+rm -rf data/events.db
+rm -rf stream-processor/build/data
+
+# 5. Remove build artifacts
+rm -rf stream-processor/build
+rm -rf query-api/target
+
+# 6. Remove Spark output
+rm -rf spark-ml-pipeline/output
+rm -rf spark-ml-pipeline/venv
+
+# 7. Start fresh
+cp .env.example .env
+docker-compose up -d
+```
+
+### What Gets Cleaned
+
+The nuclear cleanup removes:
+
+| Component | Location | What's Removed |
+|-----------|----------|----------------|
+| **RocksDB Database** | `data/events.db`, `stream-processor/build/data` | All stored events, analyses, anomalies |
+| **C++ Builds** | `stream-processor/build`, `cmake-build-*` | Compiled binaries, object files |
+| **Java Builds** | `query-api/target`, `event-generator/target` | JAR files, compiled classes |
+| **Spark Output** | `spark-ml-pipeline/output` | Parquet files, ML models, reports |
+| **Docker Volumes** | Named volumes | Kafka data, Zookeeper data, metrics |
+| **Python Virtual Env** | `spark-ml-pipeline/venv` | Python packages |
+| **Logs** | `logs/`, `*.log` | All log files |
+
+**Note:** Your `.env` configuration file, `.junie/`, and `demo/` directories are preserved.
+
+---
+
 ## Troubleshooting
 
 ### Issue: "Failed to connect to Kafka"
@@ -549,14 +825,13 @@ ls -la stream-processor/build/data/events.db
 **Solution:**
 ```bash
 # Verify API key is set
-echo $ANTHROPIC_API_KEY
+echo $OPENAI_API_KEY
 
 # Test API key manually
-curl https://api.anthropic.com/v1/messages \
-  -H "x-api-key: $ANTHROPIC_API_KEY" \
-  -H "anthropic-version: 2023-06-01" \
+curl https://api.openai.com/v1/chat/completions \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
   -H "content-type: application/json" \
-  -d '{"model":"claude-3-5-sonnet-20241022","max_tokens":100,"messages":[{"role":"user","content":"test"}]}'
+  -d '{"model":"gpt-4","max_tokens":100,"messages":[{"role":"user","content":"test"}]}'
 ```
 
 ---
@@ -587,7 +862,7 @@ curl https://api.anthropic.com/v1/messages \
 ### Environment Variables
 
 ```bash
-ANTHROPIC_API_KEY           # Claude API key
+OPENAI_API_KEY              # OpenAI GPT-4 API key
 ROCKSDB_PATH                # RocksDB database path (Query API)
 SERVER_PORT                 # Query API port (default: 8081)
 ```

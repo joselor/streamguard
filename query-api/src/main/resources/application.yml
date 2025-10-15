@@ -6,8 +6,11 @@ server:
   port: 8081
 
 # RocksDB Configuration
+# Path to the shared RocksDB database created by stream-processor
+# Default: ./data/events.db (relative to project root)
+# Override with ROCKSDB_PATH environment variable
 rocksdb:
-  path: ${ROCKSDB_PATH:../stream-processor/build/data/events.db}
+  path: ${ROCKSDB_PATH:./data/events.db}
   read-only: true
 
 # OpenAI Configuration
@@ -21,10 +24,14 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
 
 # Swagger/OpenAPI
 springdoc:

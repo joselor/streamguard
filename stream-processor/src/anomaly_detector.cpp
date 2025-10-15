@@ -128,7 +128,7 @@ AnomalyResult AnomalyResult::fromJson(const std::string& json_str) {
 
 AnomalyDetector::AnomalyDetector(size_t min_events_for_baseline)
     : min_events_for_baseline_(min_events_for_baseline)
-    , threshold_(0.7)
+    , threshold_(0.5)  // Lowered for demo - detects more subtle anomalies
 {
 }
 
@@ -154,8 +154,11 @@ std::optional<AnomalyResult> AnomalyDetector::analyze(const Event& event) {
     // Calculate anomaly score
     AnomalyResult result = calculateAnomalyScore(event, baseline);
 
-    // Update baseline with new event (continuous learning)
-    baseline.update(event);
+    // Selective baseline update: Only update with "normal" events to prevent baseline poisoning
+    // This allows adaptation to genuine behavioral changes while rejecting suspicious patterns
+    if (result.anomaly_score < threshold_) {
+        baseline.update(event);
+    }
 
     // Return anomaly if score exceeds threshold
     if (result.anomaly_score >= threshold_) {
