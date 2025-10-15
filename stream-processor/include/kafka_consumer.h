@@ -86,9 +86,11 @@ public:
 
     /**
      * Starts consuming events from Kafka.
-     * This method blocks until shutdown() is called.
+     * This method blocks until shutdown() is called or the external running flag becomes false.
+     *
+     * @param externalRunning Optional external atomic flag to control the consumer loop
      */
-    void start();
+    void start(std::atomic<bool>* externalRunning = nullptr);
 
     /**
      * Initiates graceful shutdown of the consumer.

@@ -83,7 +83,7 @@ void KafkaConsumer::initializeConsumer() {
     std::cout << "[KafkaConsumer] Topic: " << topic_ << std::endl;
 }
 
-void KafkaConsumer::start() {
+void KafkaConsumer::start(std::atomic<bool>* externalRunning) {
     // Subscribe to topic
     std::vector<std::string> topics = {topic_};
     RdKafka::ErrorCode err = consumer_->subscribe(topics);
@@ -100,7 +100,8 @@ void KafkaConsumer::start() {
     uint64_t lastLogCount = 0;
     auto lastLogTime = std::chrono::steady_clock::now();
 
-    while (running_) {
+    // Use external running flag if provided, otherwise use internal flag
+    while (running_ && (externalRunning == nullptr || *externalRunning)) {
         // Poll for messages
         std::unique_ptr<RdKafka::Message> msg(consumer_->consume(pollTimeoutMs_));
 
@@ -129,6 +130,9 @@ void KafkaConsumer::start() {
     }
 
     std::cout << "[KafkaConsumer] Consumer loop ended" << std::endl;
+
+    // Trigger shutdown to ensure proper cleanup
+    shutdown();
 }
 
 void KafkaConsumer::processMessage(RdKafka::Message* message) {

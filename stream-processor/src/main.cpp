@@ -120,9 +120,9 @@ int main(int argc, char* argv[]) {
         });
 
         // Start consuming (blocks until shutdown)
-        // Note: start() handles connection and subscription automatically
+        // Pass the global running flag so consumer can respond to signals
         std::cout << "[Main] Starting event consumer..." << std::endl;
-        consumer.start();  // Blocks until shutdown
+        consumer.start(&running_);  // Blocks until shutdown or signal received
 
         std::cout << "[Main] Consumer stopped" << std::endl;
 
