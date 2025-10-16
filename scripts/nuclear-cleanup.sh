@@ -101,7 +101,7 @@ if [ "$SKIP_BUILDS" = true ]; then
 else
     echo "To start fresh (full rebuild needed):"
     echo "  1. cp .env.example .env"
-    echo "  2. docker-compose up -d"
+    echo "  2. docker-compose up -d (zookeeper kafka prometheus grafana kafka-ui - basic services)"
     echo "  3. Build C++ processor: cd stream-processor && cmake -B build && cmake --build build"
     echo "  4. Build Java apps: mvn clean package -DskipTests"
     echo "  5. Start services with ./scripts/start-*.sh"

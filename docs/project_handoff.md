@@ -228,7 +228,7 @@ Integrate **cutting-edge AI** to:
 
 **Purpose:** Generate natural language threat assessments
 
-**Technology:** OpenAI GPT-4o-mini or Claude API
+**Technology:** OpenAI GPT-4o-mini
 
 **How It Works:**
 ```

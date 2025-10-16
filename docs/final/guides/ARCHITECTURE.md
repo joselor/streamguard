@@ -25,7 +25,7 @@ StreamGuard is a real-time security event processing and analysis platform desig
 - **Horizontal Scalability**: Kafka consumer groups enable multi-instance deployment
 - **Data Durability**: Persistent storage with RocksDB
 - **Observability**: Comprehensive Prometheus metrics
-- **AI Integration**: Seamless integration with OpenAI GPT-4
+- **AI Integration**: Selective, opt-in integration with OpenAI GPT-4o-mini
 
 ---
 
@@ -83,13 +83,13 @@ graph TB
 **Capabilities**:
 - **12,000+ events/second** throughput per instance
 - **Sub-1ms** statistical anomaly detection
-- **Real-time AI analysis** for high-threat events
+- **Selective AI analysis** for high-threat/anomalous events (opt-in, ~3-5% of events)
 - **Continuous learning** baseline updates
 
 **Key Components**:
-- Kafka consumer for event ingestion
+- Kafka consumer for event ingestion with signal handling
 - Statistical anomaly detector (5-dimensional scoring)
-- AI analyzer (OpenAI GPT-4 integration)
+- AI analyzer (OpenAI GPT-4o-mini, selective trigger: threat >= 0.7 OR anomaly)
 - RocksDB for persistent storage
 - Prometheus metrics export
 
@@ -314,7 +314,26 @@ public:
 - Automatic offset management
 - Consumer group rebalancing
 - Error handling and retry logic
-- Graceful shutdown on SIGINT/SIGTERM
+- Graceful shutdown on SIGINT/SIGTERM with external signal coordination
+
+**Signal Handling (Sprint 6 Enhancement):**
+```cpp
+// In main.cpp - global atomic flag for shutdown coordination
+std::atomic<bool> running_(true);
+
+void signalHandler(int signal) {
+    std::cout << "Received signal " << signal << ", shutting down..." << std::endl;
+    running_ = false;  // Signal all components to stop
+}
+
+// Pass external flag to consumer for coordinated shutdown
+consumer.start(&running_);  // Consumer checks both internal AND external flags
+```
+
+**Why This Matters:**
+- **Before:** Signal handler set global flag, but KafkaConsumer checked only its own internal flag → signals ignored
+- **After:** KafkaConsumer checks external `running_` flag in poll loop → immediate shutdown response
+- **Result:** Clean shutdown with SIGINT/SIGTERM (no need for kill -9)
 
 **Configuration:**
 ```cpp
@@ -414,21 +433,58 @@ private:
 class AIAnalyzer {
 private:
     std::string api_key_;
-    std::string model_name_;         // "gpt-4" or "gpt-4-turbo"
-    httplib::Client* http_client_;
+    std::string model_name_;         // "gpt-4o-mini" (cost-effective)
+    httplib::SSLClient* http_client_;
     int timeout_ms_;                 // 5000ms default
     int max_retries_;                // 3 retries
+    bool enabled_;                   // Runtime enable/disable flag
 
 public:
-    std::optional<ThreatAnalysis> analyze(const Event& event,
-                                         const EventContext& context);
+    bool isEnabled() const { return enabled_; }
+
+    std::optional<ThreatAnalysis> analyze(const Event& event);
 
 private:
-    std::string buildPrompt(const Event& event,
-                           const EventContext& context);
+    std::string buildPrompt(const Event& event);
     ThreatAnalysis parseResponse(const std::string& response);
 };
 ```
+
+**Selective Analysis Feature (Sprint 6):**
+```cpp
+// In main.cpp - Interactive opt-in prompt at startup
+bool enableAI = false;
+const char* apiKeyEnv = std::getenv("OPENAI_API_KEY");
+
+if (apiKeyEnv != nullptr) {
+    std::cout << "[AI] Enable AI-powered threat analysis? (yes/no) [default: no]: ";
+    std::string response;
+    std::getline(std::cin, response);
+    enableAI = (response == "yes" || response == "y");
+}
+
+// Initialize AI analyzer only if user confirms
+std::unique_ptr<AIAnalyzer> aiAnalyzer;
+if (enableAI) {
+    aiAnalyzer = std::make_unique<AIAnalyzer>(openaiApiKey);
+}
+
+// In event callback - selective triggering
+bool shouldAnalyzeWithAI = aiAnalyzer && aiAnalyzer->isEnabled() &&
+                           (event.threat_score >= 0.7 || isAnomalous);
+
+if (shouldAnalyzeWithAI) {
+    auto analysis = aiAnalyzer->analyze(event);
+    // Only 3-5% of events analyzed → 95%+ cost reduction
+}
+```
+
+**Cost Optimization:**
+- **Model:** GPT-4o-mini (~$0.005 per analysis)
+- **Trigger:** Only high-threat (score >= 0.7) OR anomalous events
+- **Selectivity:** ~3-5% of events analyzed
+- **User Control:** Opt-in with default disabled
+- **Daily Cost:** ~$130-215/day vs ~$4,320/day if analyzing all events
 
 **Prompt Engineering:**
 
@@ -460,19 +516,26 @@ std::string AIAnalyzer::buildPrompt(const Event& event,
 **API Integration:**
 
 ```cpp
-// HTTP POST to OpenAI API
+// HTTP POST to OpenAI Chat Completions API
 httplib::Headers headers = {
     {"Content-Type", "application/json"},
     {"Authorization", "Bearer " + api_key_}
 };
 
 json request_body = {
-    {"model", model_name_},
-    {"max_tokens", 1024},
-    {"messages", {{
-        {"role", "user"},
-        {"content", prompt}
-    }}}
+    {"model", "gpt-4o-mini"},
+    {"max_tokens", 500},
+    {"temperature", 0.3},  // Low temperature for consistent analysis
+    {"messages", json::array({
+        {
+            {"role", "system"},
+            {"content", "You are a security analyst. Analyze events and provide severity, confidence, indicators, and recommendations."}
+        },
+        {
+            {"role", "user"},
+            {"content", prompt}
+        }
+    })}
 };
 
 auto response = http_client_->Post("/v1/chat/completions",
@@ -1345,7 +1408,7 @@ max.partition.fetch.bytes=1048576
 2. **Encryption in Transit**:
    - Kafka TLS/SSL encryption
    - HTTPS for Query API
-   - TLS for Claude API calls
+   - TLS for OpenAI API calls
 
 3. **Access Control**:
    - Kafka ACLs for topic access

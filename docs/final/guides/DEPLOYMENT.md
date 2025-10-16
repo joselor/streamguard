@@ -252,11 +252,11 @@ spec:
           value: "security-events"
         - name: CONSUMER_GROUP
           value: "streamguard-processors"
-        - name: ANTHROPIC_API_KEY
+        - name: OPENAI_API_KEY
           valueFrom:
             secretKeyRef:
               name: streamguard-secrets
-              key: anthropic-api-key
+              key: openai-api-key
         - name: DB_PATH
           value: "/data/events.db"
         - name: METRICS_PORT
@@ -404,9 +404,9 @@ spec:
 ### Secrets
 
 ```bash
-# Create secret for Anthropic API key
+# Create secret for OpenAI API key
 kubectl create secret generic streamguard-secrets \
-  --from-literal=anthropic-api-key='sk-ant-api03-...' \
+  --from-literal=openai-api-key='sk-proj-...' \
   --namespace streamguard
 ```
 

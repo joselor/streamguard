@@ -26,11 +26,9 @@ graph TB
 
         subgraph "Analysis Engines"
             AD[Anomaly Detector<br/>Statistical Analysis]
-            AIA[AI Analyzer<br/>Claude API]
-            EMB[Embeddings Generator<br/>Vector Similarity]
+            AIA[AI Analyzer<br/>OpenAI GPT-4o-mini<br/>Selective, Opt-In]
             style AD fill:#E01F27,stroke:#1A1D21,color:#fff
             style AIA fill:#E01F27,stroke:#1A1D21,color:#fff
-            style EMB fill:#E01F27,stroke:#1A1D21,color:#fff
         end
 
         subgraph "Storage Layer"
@@ -39,11 +37,9 @@ graph TB
 
             CF1[default CF<br/>Security Events]
             CF2[ai_analysis CF<br/>Threat Analysis]
-            CF3[embeddings CF<br/>Vector Data]
             CF4[anomalies CF<br/>Anomaly Results]
             style CF1 fill:#2A2D31,stroke:#E01F27,color:#fff
             style CF2 fill:#2A2D31,stroke:#E01F27,color:#fff
-            style CF3 fill:#2A2D31,stroke:#E01F27,color:#fff
             style CF4 fill:#2A2D31,stroke:#E01F27,color:#fff
         end
 
@@ -82,8 +78,8 @@ graph TB
     end
 
     subgraph "External Services"
-        CLAUDE[Anthropic Claude<br/>AI Analysis]
-        style CLAUDE fill:#1A1D21,stroke:#E01F27,color:#fff
+        OPENAI[OpenAI API<br/>GPT-4o-mini<br/>Selective AI Analysis]
+        style OPENAI fill:#1A1D21,stroke:#E01F27,color:#fff
     end
 
     subgraph "Clients"
@@ -99,18 +95,15 @@ graph TB
     K -->|Security Events| KC
     KC --> ED
     ED --> VLD
-    VLD -->|Valid Events| AD
-    VLD -->|Valid Events| AIA
-    VLD -->|Valid Events| EMB
+    VLD -->|All Events| AD
+    VLD -->|Selective (if enabled)| AIA
+    VLD -->|All Events| ES
 
     AD -->|Anomaly Results| ES
-    AIA -->|Threat Analysis| ES
-    EMB -->|Vector Data| ES
-    VLD -->|Raw Events| ES
+    AIA -->|Threat Analysis<br/>High-threat/Anomalous Only| ES
 
     ES --> CF1
     ES --> CF2
-    ES --> CF3
     ES --> CF4
 
     ES -->|Read Access| QS
@@ -138,7 +131,7 @@ graph TB
     PM -->|Scrape| PROM
     PROM --> GRAF
 
-    AIA -->|API Calls| CLAUDE
+    AIA -->|Selective API Calls<br/>~3-5% of events| OPENAI
 
     %% Metrics Flow
     AD -.->|Metrics| PM
@@ -165,20 +158,18 @@ graph TB
   - 5-dimensional scoring (time, IP, location, event type, failure rate)
   - Weighted composite scoring with configurable threshold
 
-- **AI Analyzer**: Integration with Anthropic Claude for threat intelligence
+- **AI Analyzer**: Selective integration with OpenAI GPT-4o-mini for threat intelligence
+  - **Opt-in at startup**: Interactive prompt with default disabled
+  - **Selective triggering**: Only analyzes events with `threat_score >= 0.7` OR `anomaly detected`
+  - **Cost optimization**: Analyzes ~3-5% of events, reducing costs by 95%+
   - Natural language threat assessment
   - Severity classification (LOW, MEDIUM, HIGH, CRITICAL)
   - Recommended actions and mitigation strategies
 
-- **Embeddings Generator**: Vector representation of security events
-  - Semantic similarity search capability
-  - Pattern matching across event corpus
-
 #### Storage Layer
 - **Event Store**: RocksDB embedded database with column family isolation
   - **default CF**: Raw security events with time-ordered keys
-  - **ai_analysis CF**: AI threat analysis results indexed by event_id
-  - **embeddings CF**: Vector embeddings for similarity search
+  - **ai_analysis CF**: AI threat analysis results (selective, opt-in)
   - **anomalies CF**: Anomaly detection results with time-ordered keys
 
 #### Metrics & Monitoring
@@ -210,7 +201,10 @@ graph TB
 - **Grafana**: Real-time dashboards and visualization
 
 ### External Services
-- **Anthropic Claude**: AI-powered threat analysis via REST API
+- **OpenAI API**: GPT-4o-mini for selective AI-powered threat analysis
+  - **Opt-in only**: User must enable at startup
+  - **Selective**: Analyzes only high-threat (score >= 0.7) or anomalous events
+  - **Cost-optimized**: ~3-5% of events analyzed
 
 ### Clients
 - **CLI Tools**: Command-line access via curl, httpie
@@ -223,10 +217,12 @@ graph TB
 1. Security events arrive in Kafka topic
 2. Stream Processor consumes events via Kafka Consumer
 3. Events are deserialized and validated
-4. Valid events are processed by all analysis engines in parallel:
-   - Anomaly Detector checks for behavioral anomalies
-   - AI Analyzer performs threat assessment
-   - Embeddings Generator creates vector representations
+4. Valid events are processed by analysis engines:
+   - **All events**: Stored in RocksDB default column family
+   - **All events**: Anomaly Detector checks for behavioral anomalies
+   - **Selective (opt-in)**: AI Analyzer performs threat assessment IF:
+     - User enabled AI at startup, AND
+     - Event has `threat_score >= 0.7` OR `anomaly detected`
 5. All results stored in RocksDB column families
 6. Metrics exported to Prometheus
 
@@ -287,7 +283,7 @@ graph LR
 | Message Broker | Apache Kafka 3.6 | Zookeeper |
 | Storage | RocksDB 8.9 | Column families, Iterators |
 | Monitoring | Prometheus 2.48 | Grafana 10.2 |
-| AI Analysis | Anthropic Claude | Claude 3.5 Sonnet via REST API |
+| AI Analysis | OpenAI API | GPT-4o-mini via REST API (selective, opt-in) |
 
 ## Scalability Considerations
 

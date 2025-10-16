@@ -217,12 +217,13 @@ classDiagram
         -HttpClient* http_client
         -int timeout_ms
         -int max_retries
+        -bool enabled
         +AIAnalyzer(api_key, model)
         +analyze(event, context) ThreatAnalysis
-        +analyzeWithEmbedding(event) pair~ThreatAnalysis,Embedding~
         +isAvailable() bool
+        +shouldAnalyze(event, anomaly_detected) bool
         -buildPrompt(event, context) string
-        -callClaudeAPI(prompt) string
+        -callOpenAIAPI(prompt) string
         -parseResponse(response) ThreatAnalysis
         -handleAPIError(error) void
     }
@@ -240,16 +241,6 @@ classDiagram
         +isCritical() bool
     }
 
-    class Embedding {
-        +string event_id
-        +vector~double~ vector_data
-        +int dimensions
-        +uint64_t created_at
-        +toJson() string
-        +fromJson(json_str) Embedding$
-        +cosineSimilarity(other) double
-        +normalize() void
-    }
 
     class EventContext {
         +vector~Event~ recent_events
@@ -273,13 +264,11 @@ classDiagram
     }
 
     AIAnalyzer --> ThreatAnalysis : produces
-    AIAnalyzer --> Embedding : produces
     AIAnalyzer --> EventContext : uses
     AIAnalyzer --> HttpClient : uses
 
     style AIAnalyzer fill:#E01F27,stroke:#1A1D21,color:#fff
     style ThreatAnalysis fill:#1A1D21,stroke:#E01F27,color:#fff
-    style Embedding fill:#E01F27,stroke:#1A1D21,color:#fff
     style EventContext fill:#1A1D21,stroke:#E01F27,color:#fff
     style HttpClient fill:#E01F27,stroke:#1A1D21,color:#fff
 ```
@@ -294,7 +283,6 @@ classDiagram
         -rocksdb_ReadOptions read_options
         -ColumnFamilyHandle* default_cf_
         -ColumnFamilyHandle* ai_analysis_cf_
-        -ColumnFamilyHandle* embeddings_cf_
         -ColumnFamilyHandle* anomalies_cf_
         -string db_path_
         -bool read_only_
@@ -308,8 +296,6 @@ classDiagram
         +getAnalysis(event_id) optional~ThreatAnalysis~
         +putAnomaly(anomaly) bool
         +getAnomaly(event_id) optional~AnomalyResult~
-        +putEmbedding(embedding) bool
-        +getEmbedding(event_id) optional~Embedding~
         +getEventsByTimeRange(start, end, limit) vector~Event~
         +getAnomaliesByUser(user, limit) vector~AnomalyResult~
         +getHighScoreAnomalies(threshold, limit) vector~AnomalyResult~
@@ -361,7 +347,6 @@ classDiagram
     EventStore --> Event : stores
     EventStore --> ThreatAnalysis : stores
     EventStore --> AnomalyResult : stores
-    EventStore --> Embedding : stores
 
     style EventStore fill:#E01F27,stroke:#1A1D21,color:#fff
     style ColumnFamilyHandle fill:#1A1D21,stroke:#E01F27,color:#fff
@@ -504,9 +489,8 @@ classDiagram
         -ColumnFamilyHandle defaultColumnFamily
         -ColumnFamilyHandle aiAnalysisColumnFamily
         -ColumnFamilyHandle anomaliesColumnFamily
-        -ColumnFamilyHandle embeddingsColumnFamily
         -ObjectMapper objectMapper
-        +QueryService(rocksDB, cf_default, cf_ai, cf_anomalies, cf_embeddings)
+        +QueryService(rocksDB, cf_default, cf_ai, cf_anomalies)
         +getLatestEvents(limit) List~SecurityEvent~
         +getEventById(eventId) SecurityEvent
         +getLatestAnomalies(limit) List~AnomalyResult~
@@ -587,7 +571,6 @@ classDiagram
         +defaultColumnFamily() ColumnFamilyHandle @Bean
         +aiAnalysisColumnFamily() ColumnFamilyHandle @Bean
         +anomaliesColumnFamily() ColumnFamilyHandle @Bean
-        +embeddingsColumnFamily() ColumnFamilyHandle @Bean
         +closeDB() void @PreDestroy
         -findColumnFamily(name) ColumnFamilyHandle
     }

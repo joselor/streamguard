@@ -75,7 +75,7 @@ RocksDB (embedded storage)
     ↓
 Query API (Java/Spring Boot)
     ↓
-AI Analysis (Claude 3.5 Sonnet)
+AI Analysis (OpenAI GPT-4o-mini)
 ```
 
 **Key Design Decisions:**
@@ -99,7 +99,7 @@ AI Analysis (Claude 3.5 Sonnet)
 ### Observability & AI
 - **Prometheus**: Metrics collection and monitoring
 - **Grafana**: Real-time visualization dashboards
-- **Anthropic Claude 3.5 Sonnet**: AI-powered threat narrative generation
+- **OpenAI GPT-4o-mini**: Selective AI-powered threat analysis (opt-in, high-threat events only)
 - **Statistical Models**: 5-dimensional anomaly scoring
 
 ### Build Tools
@@ -139,6 +139,7 @@ docker-compose up -d
 # 3. Build and start components (using Sprint 5 scripts)
 ./scripts/start-event-generator.sh    # Generates test events
 ./scripts/start-stream-processor.sh   # Processes events in C++
+                                       # Note: Will prompt to enable AI analysis (default: no)
 ./scripts/start-query-api.sh          # REST API for queries
 
 # 4. Verify system is working
@@ -167,9 +168,11 @@ For detailed setup instructions, see [docs/final/guides/QUICK_START.md](docs/fin
 ✅ **Configurable thresholds** - Tunable sensitivity for different scenarios
 
 ### AI Integration
-✅ **LLM-powered analysis** - Claude 3.5 Sonnet for threat narratives  
-✅ **Contextual insights** - Natural language security explanations  
-✅ **Graceful degradation** - System works without AI if API unavailable
+✅ **Selective AI analysis** - Opt-in GPT-4o-mini for high-threat/anomalous events only
+✅ **Cost-conscious design** - Analyzes only 3-5% of events (threat_score >= 0.7 OR anomaly)
+✅ **Interactive startup** - Prompts user to enable AI (default: disabled)
+✅ **Contextual insights** - Natural language security explanations
+✅ **Graceful degradation** - System works without AI if disabled or unavailable
 
 ### Observability
 ✅ **Prometheus metrics** - Throughput, latency, anomaly rates  
@@ -304,7 +307,7 @@ Applying for: Senior Engineering Manager - Streaming Search at CrowdStrike
 **Technologies Used:**
 - Apache Kafka - Distributed streaming platform
 - RocksDB - Embedded storage engine
-- Anthropic Claude - AI-powered analysis
+- OpenAI GPT-4o-mini - Selective AI-powered threat analysis
 - Spring Boot - Java API framework
 - Prometheus & Grafana - Observability stack
 

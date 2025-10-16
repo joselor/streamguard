@@ -64,6 +64,130 @@ Comprehensive troubleshooting guide for common issues and their solutions.
 
 ---
 
+### Issue: "Stream processor doesn't respond to kill signals (SIGINT/SIGTERM)"
+
+**Symptoms:**
+```bash
+$ ./stream-processor &
+[1] 12345
+
+$ kill -SIGTERM 12345
+# No response, process keeps running
+
+$ kill -SIGINT 12345
+# Still no response
+
+# Only kill -9 works (force kill)
+$ kill -9 12345
+[1]+  Killed                  ./stream-processor
+```
+
+**Causes:**
+- Old version before Sprint 6 signal handling fix
+- Signal handler not properly connected to consumer loop
+- Running in non-interactive mode where signals are blocked
+
+**Solutions:**
+
+1. **Verify you have latest version with signal handling fix:**
+   ```bash
+   # Check git commit
+   git log --oneline -5 | grep signal
+
+   # Should see commit like:
+   # abc1234 fix: Fix signal handling in stream-processor for graceful shutdown
+
+   # If not found, pull latest
+   git pull origin main
+   cd stream-processor && mkdir -p build && cd build
+   cmake .. && make
+   ```
+
+2. **Use Ctrl+C to send SIGINT:**
+   ```bash
+   # Start in foreground
+   ./stream-processor
+
+   # Press Ctrl+C
+   ^C
+   [Main] Received signal 2, shutting down gracefully...
+   [KafkaConsumer] Consumer loop ended
+   [KafkaConsumer] Shutting down...
+   [Main] Stream processor terminated successfully
+   ```
+
+3. **Send SIGTERM properly:**
+   ```bash
+   # Get PID
+   PID=$(pgrep stream-processor)
+
+   # Send SIGTERM (signal 15)
+   kill -SIGTERM $PID
+   # or just:
+   kill $PID
+
+   # Wait a few seconds for graceful shutdown
+   sleep 3
+
+   # Check if still running
+   ps -p $PID
+   ```
+
+4. **Check logs for shutdown message:**
+   ```bash
+   # Look for shutdown messages
+   grep "shutting down" stream-processor/logs/output.log
+
+   # Should see:
+   # [Main] Received signal 15, shutting down gracefully...
+   # [KafkaConsumer] Consumer loop ended
+   # [KafkaConsumer] Closing consumer and committing offsets...
+   # [Main] Stream processor terminated successfully
+   ```
+
+5. **If signals still don't work (Docker/systemd):**
+   ```bash
+   # In Docker
+   docker stop streamguard-stream-processor --time=10
+   # Sends SIGTERM, waits 10s, then SIGKILL
+
+   # In systemd
+   systemctl stop streamguard-processor
+   # Uses configured TimeoutStopSec
+   ```
+
+6. **Last resort - force kill (not recommended):**
+   ```bash
+   # Force kill without cleanup
+   kill -9 $(pgrep stream-processor)
+
+   # Note: This skips:
+   # - Kafka offset commits (may reprocess events)
+   # - RocksDB flush (may lose recent writes)
+   # - Metrics final export
+   ```
+
+**How Sprint 6 Fix Works:**
+```cpp
+// Global atomic flag coordinated with signal handler
+std::atomic<bool> running_(true);
+
+void signalHandler(int signal) {
+    running_ = false;  // Signal all components to stop
+}
+
+// Consumer checks external flag in poll loop
+consumer.start(&running_);  // Pass external flag
+
+// Inside KafkaConsumer::start()
+while (running_ && (externalRunning == nullptr || *externalRunning)) {
+    // Poll and process...
+    // Now checks both internal AND external running flags
+}
+```
+
+---
+
 ### Issue: "RocksDB: Corruption detected"
 
 **Symptoms:**
@@ -473,13 +597,13 @@ Disk space running out
 
 ## AI/ML Issues
 
-### Issue: "Anthropic API errors"
+### Issue: "OpenAI API errors"
 
 **Symptoms:**
 ```
-[Error] Claude API error: 401 Unauthorized
-[Error] Claude API error: 429 Too Many Requests
-[Error] Claude API timeout after 5000ms
+[Error] OpenAI API error: 401 Unauthorized
+[Error] OpenAI API error: 429 Too Many Requests
+[Error] OpenAI API timeout after 5000ms
 ```
 
 **Solutions:**
@@ -487,14 +611,17 @@ Disk space running out
 **401 Unauthorized:**
 ```bash
 # Verify API key is set
-echo $ANTHROPIC_API_KEY
+echo $OPENAI_API_KEY
 
 # Test API key
-curl https://api.anthropic.com/v1/messages \
-  -H "x-api-key: $ANTHROPIC_API_KEY" \
-  -H "anthropic-version: 2023-06-01" \
-  -H "content-type: application/json" \
-  -d '{"model":"claude-3-5-sonnet-20241022","max_tokens":10,"messages":[{"role":"user","content":"test"}]}'
+curl https://api.openai.com/v1/chat/completions \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o-mini",
+    "messages": [{"role": "user", "content": "test"}],
+    "max_tokens": 10
+  }'
 ```
 
 **429 Rate Limit:**
@@ -505,7 +632,7 @@ int max_retries = 5;
 
 while (retry_count < max_retries) {
     try {
-        return callClaudeAPI(prompt);
+        return callOpenAIAPI(prompt);
     } catch (const RateLimitException& e) {
         int backoff_ms = std::pow(2, retry_count) * 1000;  // 1s, 2s, 4s, 8s, 16s
         std::this_thread::sleep_for(std::chrono::milliseconds(backoff_ms));
@@ -519,12 +646,100 @@ while (retry_count < max_retries) {
 // Increase timeout
 http_client_->set_read_timeout(10);  // 10 seconds
 
-// Or disable AI analysis during high load
+// Or skip AI analysis during high load (it's selective anyway)
 if (current_load > threshold) {
     LOG_WARN("High load, skipping AI analysis");
     return std::nullopt;
 }
 ```
+
+---
+
+### Issue: "AI analysis not running (selective mode)"
+
+**Symptoms:**
+```
+curl http://localhost:8081/api/analyses/count
+0
+
+# All events processed but no AI analyses
+```
+
+**Causes:**
+- AI disabled at startup (default behavior)
+- No events meet trigger criteria (threat < 0.7 AND not anomalous)
+- OPENAI_API_KEY not set
+
+**Solutions:**
+
+1. **Check if AI was enabled at startup:**
+   ```bash
+   # Look in stream-processor logs
+   grep "\[AI\]" stream-processor/logs/output.log
+
+   # Should see:
+   # [AI] ✓ AI analysis ENABLED - Will analyze high-threat and anomalous events
+   # Or:
+   # [AI] AI analysis DISABLED (default)
+   ```
+
+2. **Verify trigger conditions are being met:**
+   ```bash
+   # Check for high-threat events
+   curl 'http://localhost:8081/api/events/threat?minScore=0.7&limit=10'
+
+   # Check for anomalies
+   curl 'http://localhost:8081/api/anomalies/recent?limit=10'
+
+   # If both return empty, AI won't trigger (by design)
+   ```
+
+3. **Enable AI at startup:**
+   ```bash
+   # Restart stream-processor
+   ./scripts/start-stream-processor.sh
+
+   # When prompted:
+   [AI] Enable AI-powered threat analysis? (yes/no) [default: no]: yes
+   ```
+
+4. **Check OPENAI_API_KEY:**
+   ```bash
+   # Verify environment variable
+   echo $OPENAI_API_KEY
+
+   # Should start with: sk-proj-...
+
+   # Set if missing
+   export OPENAI_API_KEY="sk-proj-your-key-here"
+   ```
+
+5. **Generate events that trigger AI:**
+   ```bash
+   # Send high-threat event
+   curl -X POST http://localhost:9092/topics/security-events \
+     -H "Content-Type: application/json" \
+     -d '{
+       "event_id": "test-high-threat",
+       "user": "alice",
+       "timestamp": '$(date +%s000)',
+       "type": "LOGIN_FAILED",
+       "source_ip": "192.168.99.99",
+       "geo_location": "Unknown",
+       "threat_score": 0.85
+     }'
+
+   # Wait a few seconds, then check
+   sleep 5
+   curl http://localhost:8081/api/analyses/recent?limit=1
+   ```
+
+6. **Cost optimization is working as designed:**
+   ```
+   ✓ AI analyzes only 3-5% of events (high-threat or anomalous)
+   ✓ Default: disabled unless user explicitly enables
+   ✓ This saves 95%+ on API costs
+   ```
 
 ---
 

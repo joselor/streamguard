@@ -52,7 +52,7 @@ brew install librdkafka rocksdb prometheus-cpp curl nlohmann-json cmake pkg-conf
 
 ```bash
 # Set these in your shell profile
-export CLAUDE_API_KEY="your-api-key"  # For AI analysis (optional)
+export OPENAI_API_KEY="your-api-key"  # For AI analysis (optional)
 export JAVA_HOME="/path/to/jdk-17"
 ```
 

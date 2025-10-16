@@ -151,8 +151,8 @@ Demonstrates:
         │                    │      │                    │
         │ ┌────────────────┐ │      │ ┌────────────────┐ │
         │ │ AI Analysis    │ │      │ │ ML Anomaly     │ │
-        │ │ ├─ Claude API  │ │      │ │ Detection      │ │
-        │ │ └─ High threat │ │      │ │ ├─ Isolation   │ │
+        │ │ ├─ OpenAI API  │ │      │ │ Detection      │ │
+        │ │ └─ Selective   │ │      │ │ ├─ Isolation   │ │
         │ └────────────────┘ │      │ │   Forest       │ │
         │                    │      │ │ └─ K-Means     │ │
         │ ┌────────────────┐ │      │ └────────────────┘ │

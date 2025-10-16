@@ -4,11 +4,10 @@ Comprehensive guide to AI and Machine Learning features in StreamGuard.
 
 ## Overview
 
-StreamGuard integrates AI/ML capabilities in three key areas:
+StreamGuard integrates AI/ML capabilities in two key areas:
 
-1. **AI-Powered Threat Analysis** - Using Anthropic Claude for natural language threat assessment
-2. **Statistical Anomaly Detection** - Probabilistic behavioral baseline tracking
-3. **Vector Embeddings** - Semantic similarity search for pattern matching
+1. **AI-Powered Threat Analysis** - Using OpenAI GPT-4o-mini for natural language threat assessment (selective, opt-in)
+2. **Statistical Anomaly Detection** - Probabilistic behavioral baseline tracking (always enabled)
 
 ---
 
@@ -20,15 +19,19 @@ StreamGuard integrates AI/ML capabilities in three key areas:
 sequenceDiagram
     participant Event as Security Event
     participant Analyzer as AI Analyzer
-    participant Claude as Anthropic Claude API
+    participant OpenAI as OpenAI API (GPT-4o-mini)
     participant Store as RocksDB
 
-    Event->>Analyzer: New event + context
-    Analyzer->>Analyzer: Build prompt with context
-    Analyzer->>Claude: POST /v1/messages
-    Claude-->>Analyzer: AI analysis response
-    Analyzer->>Analyzer: Parse & structure
-    Analyzer->>Store: Save to ai_analysis CF
+    Event->>Analyzer: Check if high-threat OR anomalous
+    alt Should analyze (threat >= 0.7 OR anomaly)
+        Analyzer->>Analyzer: Build prompt with context
+        Analyzer->>OpenAI: POST /v1/chat/completions
+        OpenAI-->>Analyzer: AI analysis response
+        Analyzer->>Analyzer: Parse & structure
+        Analyzer->>Store: Save to ai_analysis CF
+    else Normal event (skip AI)
+        Note over Analyzer: No AI analysis (cost saving)
+    end
 ```
 
 ### Implementation
@@ -39,26 +42,37 @@ sequenceDiagram
 class AIAnalyzer {
 private:
     std::string api_key_;
-    std::string model_name_ = "claude-3-5-sonnet-20241022";
-    httplib::Client* http_client_;
+    std::string model_name_ = "gpt-4o-mini";
+    httplib::SSLClient* http_client_;
+    bool enabled_ = true;
 
 public:
-    std::optional<ThreatAnalysis> analyze(const Event& event,
-                                         const EventContext& context) {
-        // Build contextual prompt
-        std::string prompt = buildPrompt(event, context);
+    bool isEnabled() const { return enabled_; }
 
-        // Call Claude API
+    std::optional<ThreatAnalysis> analyze(const Event& event) {
+        if (!enabled_) return std::nullopt;
+
+        // Build contextual prompt
+        std::string prompt = buildPrompt(event);
+
+        // Call OpenAI Chat Completions API
         json request_body = {
             {"model", model_name_},
-            {"max_tokens", 1024},
-            {"messages", {{
-                {"role", "user"},
-                {"content", prompt}
-            }}}
+            {"max_tokens", 500},
+            {"temperature", 0.3},
+            {"messages", json::array({
+                {
+                    {"role", "system"},
+                    {"content", "You are a security analyst. Analyze events and provide severity, confidence, indicators, and recommendations."}
+                },
+                {
+                    {"role", "user"},
+                    {"content", prompt}
+                }
+            })}
         };
 
-        auto response = http_client_->Post("/v1/messages",
+        auto response = http_client_->Post("/v1/chat/completions",
                                           headers,
                                           request_body.dump(),
                                           "application/json");
@@ -68,6 +82,63 @@ public:
     }
 };
 ```
+
+### Selective AI Analysis (Cost Optimization)
+
+**Key Feature:** AI analysis is **opt-in** and **selective** to minimize API costs while maximizing security value.
+
+**Trigger Conditions (both must be true):**
+1. **User enables AI at startup** - Interactive prompt with default: disabled
+2. **Event meets criteria:**
+   - `threat_score >= 0.7` (high-threat events), OR
+   - `anomaly detected` (behavioral anomaly)
+
+**Cost Impact:**
+- Only analyzes ~3-5% of events (high-threat + anomalous)
+- Estimated cost: ~$0.005 per analysis with GPT-4o-mini
+- 10,000 events/sec → ~300-500 analyses/sec → ~$1.50-$2.50/sec
+- Daily cost (86.4M events): ~$130-$215/day vs ~$4,320/day if analyzing all events
+
+**Implementation in `main.cpp`:**
+
+```cpp
+// Interactive startup prompt
+bool enableAI = false;
+const char* apiKeyEnv = std::getenv("OPENAI_API_KEY");
+
+if (apiKeyEnv != nullptr && std::string(apiKeyEnv).length() > 0) {
+    std::cout << "[AI] OPENAI_API_KEY detected" << std::endl;
+    std::cout << "[AI] Enable AI-powered threat analysis? (yes/no) [default: no]: ";
+
+    std::string response;
+    std::getline(std::cin, response);
+
+    enableAI = (response == "yes" || response == "y");
+}
+
+// Initialize AI analyzer if enabled
+std::unique_ptr<AIAnalyzer> aiAnalyzer;
+if (enableAI) {
+    aiAnalyzer = std::make_unique<AIAnalyzer>(openaiApiKey);
+}
+
+// Selective analysis in event callback
+bool shouldAnalyzeWithAI = aiAnalyzer && aiAnalyzer->isEnabled() &&
+                           (event.threat_score >= 0.7 || isAnomalous);
+
+if (shouldAnalyzeWithAI) {
+    auto analysis = aiAnalyzer->analyze(event);
+    // Store analysis...
+}
+```
+
+**Benefits:**
+- ✅ **Cost-conscious:** Only analyze events that matter
+- ✅ **User control:** Explicit opt-in, no surprises
+- ✅ **Safe default:** Disabled unless user confirms
+- ✅ **Graceful degradation:** System works without AI
+
+---
 
 ### Prompt Engineering
 
@@ -138,14 +209,14 @@ Provide:
 
 ```cpp
 try {
-    auto response = callClaudeAPI(prompt);
+    auto response = callOpenAIAPI(prompt);
     return parseResponse(response);
 } catch (const httplib::TimeoutException& e) {
-    LOG_ERROR("Claude API timeout: " << e.what());
+    LOG_ERROR("OpenAI API timeout: " << e.what());
     // Retry with exponential backoff
     return retryWithBackoff(prompt, max_retries_);
 } catch (const httplib::ConnectionException& e) {
-    LOG_ERROR("Claude API connection error: " << e.what());
+    LOG_ERROR("OpenAI API connection error: " << e.what());
     // Continue processing without AI analysis
     return std::nullopt;
 }
@@ -312,95 +383,6 @@ void AnomalyDetector::updateBaseline(const std::string& user, const Event& event
 
 ---
 
-## Vector Embeddings
-
-### Purpose
-
-Vector embeddings enable semantic similarity search across security events, allowing the system to find related incidents based on meaning rather than exact keyword matches.
-
-### Implementation
-
-**Embedding Generation:**
-
-```cpp
-Embedding AIAnalyzer::generateEmbedding(const Event& event) {
-    // Create text representation of event
-    std::string event_text = formatEventForEmbedding(event);
-
-    // Call Claude API for embedding
-    json request_body = {
-        {"model", "claude-3-5-sonnet-20241022"},
-        {"input", event_text},
-        {"encoding_format", "float"}
-    };
-
-    auto response = http_client_->Post("/v1/embeddings",
-                                       headers,
-                                       request_body.dump(),
-                                       "application/json");
-
-    // Parse embedding vector (1536 dimensions)
-    auto result = json::parse(response->body);
-    std::vector<double> vector = result["data"][0]["embedding"];
-
-    return Embedding{event.event_id, vector};
-}
-```
-
-**Similarity Search:**
-
-```cpp
-std::vector<Event> findSimilarEvents(const Embedding& query_embedding,
-                                     size_t limit = 10) {
-    std::vector<std::pair<double, Event>> scored_events;
-
-    // Iterate through all embeddings
-    auto it = db_->NewIterator(embeddings_cf_);
-    for (it->SeekToFirst(); it->Valid(); it->Next()) {
-        Embedding stored = Embedding::fromJson(it->value().ToString());
-
-        // Calculate cosine similarity
-        double similarity = cosineSimilarity(query_embedding.vector_data,
-                                            stored.vector_data);
-
-        scored_events.push_back({similarity, getEvent(stored.event_id)});
-    }
-
-    // Sort by similarity descending
-    std::sort(scored_events.begin(), scored_events.end(),
-              [](const auto& a, const auto& b) { return a.first > b.first; });
-
-    // Return top K
-    std::vector<Event> results;
-    for (size_t i = 0; i < std::min(limit, scored_events.size()); i++) {
-        results.push_back(scored_events[i].second);
-    }
-
-    return results;
-}
-```
-
-**Cosine Similarity:**
-
-```cpp
-double cosineSimilarity(const std::vector<double>& a,
-                       const std::vector<double>& b) {
-    double dot_product = 0.0;
-    double norm_a = 0.0;
-    double norm_b = 0.0;
-
-    for (size_t i = 0; i < a.size(); i++) {
-        dot_product += a[i] * b[i];
-        norm_a += a[i] * a[i];
-        norm_b += b[i] * b[i];
-    }
-
-    return dot_product / (std::sqrt(norm_a) * std::sqrt(norm_b));
-}
-```
-
----
-
 ## Performance Considerations
 
 ### AI API Latency
@@ -420,11 +402,11 @@ double cosineSimilarity(const std::vector<double>& a,
   - L = unique locations per user (~5-20)
   - T = event types (~10)
 
-### Embedding Storage
+### AI Analysis Performance
 
-- **Dimensions:** 1536 per event
-- **Size:** ~6KB per embedding (uncompressed)
-- **Compression:** 60-70% reduction with RocksDB compression
+- **Selectivity:** Only 3-5% of events analyzed
+- **Throughput:** ~300-500 analyses/sec at 10K events/sec
+- **Cost efficiency:** 95-97% cost reduction vs analyzing all events
 
 ---
 
@@ -464,17 +446,23 @@ streamguard_baseline_ready_users 1247
 
 ### AI Analyzer Configuration
 
-```json
-{
-  "ai_analyzer": {
-    "api_key": "sk-ant-api03-...",
-    "model": "claude-3-5-sonnet-20241022",
-    "max_tokens": 1024,
-    "timeout_ms": 5000,
-    "max_retries": 3,
-    "enable_embeddings": true
-  }
-}
+**Environment Variable:**
+```bash
+export OPENAI_API_KEY="sk-proj-..."
+```
+
+**Startup Behavior:**
+- If `OPENAI_API_KEY` is set → Prompt user to enable AI (default: no)
+- If `OPENAI_API_KEY` is not set → AI disabled, no prompt
+
+**Configuration in Code:**
+```cpp
+// Model: gpt-4o-mini
+// Max tokens: 500
+// Temperature: 0.3 (low for consistent security analysis)
+// Timeout: 5000ms
+// Max retries: 3
+// Trigger: threat_score >= 0.7 OR anomaly_detected
 ```
 
 ### Anomaly Detector Configuration

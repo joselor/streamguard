@@ -23,7 +23,7 @@ The **Stream Processor** is the **Speed Layer** in StreamGuard's Lambda Architec
 │                            ▼                                  │
 │                    ┌──────────────┐                          │
 │                    │ AI Analyzer  │                          │
-│                    │  (Claude)    │                          │
+│                    │  (OpenAI)    │                          │
 │                    └──────────────┘                          │
 │                            │                                  │
 │                            ▼                                  │

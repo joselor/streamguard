@@ -188,6 +188,42 @@ Create `stream-processor/build/config.json`:
 
 ## Step 7: Start Stream Processor
 
+### Using Startup Script (Recommended)
+
+```bash
+./scripts/start-stream-processor.sh
+```
+
+The startup script will:
+1. Load configuration from `.env`
+2. Check if OPENAI_API_KEY is set
+3. **Prompt you to enable AI analysis** (optional, default: no)
+4. Start the stream processor
+
+### AI Analysis Prompt
+
+If OPENAI_API_KEY is configured, you'll see:
+
+```
+[AI] OPENAI_API_KEY detected
+[AI] Enable AI-powered threat analysis? (yes/no) [default: no]:
+```
+
+**Response Options:**
+- Press **Enter** or type **no** → AI analysis disabled (default, no API costs)
+- Type **yes** → AI analysis enabled for high-threat/anomalous events
+
+**When enabled:**
+```
+[AI] ✓ AI analysis ENABLED - Will analyze high-threat and anomalous events
+[AI]   Model: GPT-4o-mini
+[AI]   Trigger: threat_score >= 0.7 OR anomaly detected
+```
+
+**Cost estimate:** AI analyzes only 3-5% of events (high-threat or anomalous), costing ~$0.005 per analysis with GPT-4o-mini.
+
+### Manual Start (Alternative)
+
 ```bash
 cd stream-processor/build
 
@@ -205,16 +241,24 @@ mkdir -p data
 
 Expected output:
 ```
-[Main] StreamGuard starting...
-[Main] Kafka broker: localhost:9092
-[Main] Topic: security-events
-[Main] Consumer group: streamguard-processor
+[Main] StreamGuard Stream Processor starting...
+[Main] Configuration:
+[Main]   Kafka broker: localhost:9092
+[Main]   Topic: security-events
+[Main]   Consumer group: streamguard-processor
+[Main]   Database path: ./data/events.db
+[Main]   Metrics port: 8080
+
+[AI] OPENAI_API_KEY detected
+[AI] Enable AI-powered threat analysis? (yes/no) [default: no]:
+
+[Main] Starting metrics server on port 8080...
 [Main] Opening RocksDB at: ./data/events.db
 [Main] Column families: default, ai_analysis, embeddings, anomalies
-[Main] Metrics server started on port 8080
-[Main] Connecting to Kafka...
+[Main] Initializing anomaly detector...
+[Main] Creating Kafka consumer...
 [Main] Subscribed to topic: security-events
-[Main] Ready to process events
+[Main] Starting event consumer...
 ```
 
 ---
@@ -895,7 +939,12 @@ grep OPENAI_API_KEY .env
 # Restart stream-processor after setting API key
 pkill -f stream-processor
 ./scripts/start-stream-processor.sh
+
+# IMPORTANT: When prompted, type "yes" to enable AI analysis:
+# [AI] Enable AI-powered threat analysis? (yes/no) [default: no]: yes
 ```
+
+**Note:** AI analysis is **opt-in** to prevent accidental API costs. You must explicitly enable it at startup by typing "yes" when prompted. Default is disabled.
 
 7. **For anomalies specifically:**
 ```bash

@@ -57,30 +57,23 @@ flowchart TB
             A1 --> A2 --> A3 --> A4
         end
 
-        subgraph AI["AI Threat Analysis"]
+        subgraph AI["AI Threat Analysis (SELECTIVE)"]
             direction TB
+            B0{Check Trigger<br/>threat >= 0.7<br/>OR anomaly?}
             B1[Prepare event context<br/>Recent failures: 3<br/>Known IPs: 5]
-            B2[Call Claude API<br/>Model: 3.5 Sonnet]
+            B2[Call OpenAI API<br/>Model: GPT-4o-mini]
             B3[Parse AI response<br/>Severity: MEDIUM<br/>Confidence: 0.85]
             B4[Store analysis<br/>Column Family: ai_analysis]
+            SKIP[Skip AI Analysis<br/>Cost savings]
+            style B0 fill:#E01F27,stroke:#1A1D21,color:#fff
             style B1 fill:#1A1D21,stroke:#E01F27,color:#fff
             style B2 fill:#E01F27,stroke:#1A1D21,color:#fff
             style B3 fill:#1A1D21,stroke:#E01F27,color:#fff
             style B4 fill:#1A1D21,stroke:#E01F27,color:#fff
+            style SKIP fill:#2A2D31,stroke:#E01F27,color:#fff
+            B0 -->|Yes + AI enabled| B1
+            B0 -->|No or AI disabled| SKIP
             B1 --> B2 --> B3 --> B4
-        end
-
-        subgraph Embedding["Vector Embeddings"]
-            direction TB
-            C1[Create event text<br/>'alice failed login<br/>from 10.0.1.50']
-            C2[Generate embedding<br/>via Claude API]
-            C3[Store vector<br/>1536 dimensions]
-            C4[Update similarity index<br/>Column Family: embeddings]
-            style C1 fill:#1A1D21,stroke:#E01F27,color:#fff
-            style C2 fill:#1A1D21,stroke:#E01F27,color:#fff
-            style C3 fill:#E01F27,stroke:#1A1D21,color:#fff
-            style C4 fill:#1A1D21,stroke:#E01F27,color:#fff
-            C1 --> C2 --> C3 --> C4
         end
     end
 
@@ -100,17 +93,16 @@ flowchart TB
 
     E --> Anomaly
     E --> AI
-    E --> Embedding
     E --> Storage
 
     Anomaly --> Metrics
     AI --> Metrics
-    Embedding --> Metrics
     Storage --> Metrics
 ```
 
 **Processing Characteristics:**
 - All analysis engines run in parallel
+- **Selective AI**: Only 3-5% of events analyzed (high-threat or anomalous)
 - Independent failure handling (if AI API fails, anomaly detection continues)
 - Non-blocking storage operations
 - Real-time metrics updates
@@ -147,15 +139,6 @@ graph TB
             style AN1 fill:#2A2D31,stroke:#E01F27,color:#fff
             style AN2 fill:#2A2D31,stroke:#E01F27,color:#fff
             style AN3 fill:#2A2D31,stroke:#E01F27,color:#fff
-        end
-
-        subgraph CF4["Column Family: embeddings"]
-            EM1[Key: evt_001<br/>Value: [0.123, -0.456, ...]]
-            EM2[Key: evt_002<br/>Value: [0.789, 0.234, ...]]
-            EM3[Key: evt_003<br/>Value: [-0.321, 0.987, ...]]
-            style EM1 fill:#2A2D31,stroke:#E01F27,color:#fff
-            style EM2 fill:#2A2D31,stroke:#E01F27,color:#fff
-            style EM3 fill:#2A2D31,stroke:#E01F27,color:#fff
         end
     end
 
@@ -294,15 +277,14 @@ timeline
         3ms : JSON deserialized and validated
     section Analysis
         5ms : Anomaly detection starts
-        8ms : AI analysis API call sent
-        12ms : Embedding generation starts
-        15ms : Anomaly score computed (0.73)
+        8ms : Check AI trigger (threat >= 0.7 OR anomaly)
+        10ms : Anomaly score computed (0.73)
+        12ms : AI analysis API call sent (if triggered)
         45ms : AI analysis received (MEDIUM severity)
-        48ms : Embedding vector generated
     section Storage
-        50ms : All results written to RocksDB
-        52ms : Write confirmed, offsets committed
-        54ms : Metrics updated in Prometheus format
+        48ms : All results written to RocksDB
+        50ms : Write confirmed, offsets committed
+        52ms : Metrics updated in Prometheus format
     section Query
         1000ms : Client queries /api/anomalies/high-score
         1005ms : Iterator created on anomalies CF
@@ -366,6 +348,8 @@ flowchart TD
 - **Compression**: LZ4 for balance of speed/size
 
 ### 3. AI API Optimization
+- **Selective Triggering**: Only analyze 3-5% of events (95%+ cost reduction)
+- **Opt-in at Startup**: User must explicitly enable AI analysis
 - **Connection Pooling**: Reuse HTTP connections
 - **Timeout Configuration**: 5s timeout prevents blocking
 - **Retry Strategy**: Exponential backoff with jitter
@@ -379,18 +363,18 @@ flowchart TD
 
 ## Data Volume Projections
 
-| Time Period | Events Processed | Storage Used | Anomalies Detected | AI Analyses |
-|-------------|------------------|--------------|-------------------|-------------|
-| 1 hour | 36M | ~18GB | ~360K (1%) | ~36M |
-| 1 day | 864M | ~432GB | ~8.6M | ~864M |
-| 1 week | 6.05B | ~3TB | ~60M | ~6B |
-| 1 month | 25.9B | ~13TB | ~259M | ~26B |
+| Time Period | Events Processed | Storage Used | Anomalies Detected | AI Analyses (Selective) |
+|-------------|------------------|--------------|-------------------|------------------------|
+| 1 hour | 36M | ~18GB | ~360K (1%) | ~1.4M (4%) |
+| 1 day | 864M | ~432GB | ~8.6M | ~34M (4%) |
+| 1 week | 6.05B | ~3TB | ~60M | ~242M (4%) |
+| 1 month | 25.9B | ~13TB | ~259M | ~1.04B (4%) |
 
 **Assumptions:**
 - 10,000 events/second sustained
 - 500 bytes per event (compressed)
 - 1% anomaly detection rate
-- 100% AI analysis rate
+- **4% AI analysis rate** (selective: threat >= 0.7 OR anomaly, opt-in)
 
 ## Conclusion
 
