@@ -203,6 +203,35 @@ services:
       - streamguard-network
     restart: unless-stopped
 
+  # AI Security Assistant (GenAI Service)
+  genai-assistant:
+    build:
+      context: ./genai-assistant
+      dockerfile: Dockerfile
+    container_name: streamguard-genai-assistant
+    depends_on:
+      - query-api
+    environment:
+      - SERVICE_HOST=0.0.0.0
+      - SERVICE_PORT=8002
+      - LOG_LEVEL=INFO
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=gpt-4o-mini
+      - OPENAI_TEMPERATURE=0.7
+      - JAVA_API_URL=http://query-api:8081
+      - RAG_SERVICE_URL=http://host.docker.internal:8000
+    ports:
+      - "8002:8002"  # AI Assistant API
+    networks:
+      - streamguard-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8002/health', timeout=5.0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
 # Named volumes for data persistence
 volumes:
   zookeeper-data:

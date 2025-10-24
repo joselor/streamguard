@@ -73,16 +73,24 @@ Stream Processor (C++ for performance)
     ↓
 RocksDB (embedded storage)
     ↓
-Query API (Java/Spring Boot)
+Query API (Java/Spring Boot) ←─────┐
+    ↓                              │
+AI Analysis (OpenAI GPT-4o-mini)   │
+    ↓                              │
+RAG Service (FastAPI + ChromaDB)   │
+    ↓                              │
+GenAI Assistant (FastAPI) ─────────┘
     ↓
-AI Analysis (OpenAI GPT-4o-mini)
+Natural Language Interface
 ```
 
 **Key Design Decisions:**
 - **C++ for processing**: Performance + RocksDB native integration
 - **Java for generator/API**: Rapid development + mature Kafka client
+- **FastAPI for GenAI services**: Modern async Python for AI integration
 - **Statistical anomaly detection**: Simple, explainable, no training data required
-- **AI for narrative generation**: Shows modern capability integration
+- **RAG pattern**: Threat intelligence retrieval with vector search
+- **Conversational AI**: Natural language interface for security analysts
 
 ---
 
@@ -96,10 +104,13 @@ AI Analysis (OpenAI GPT-4o-mini)
 - **Docker**: Container orchestration for local development
 - **Git**: Version control with clean commit history
 
-### Observability & AI
+### GenAI & Observability
+- **FastAPI**: Modern async Python framework for AI services
+- **Python 3.11**: AI/ML services and data processing
+- **OpenAI GPT-4o-mini**: AI-powered threat analysis and conversational interface
+- **ChromaDB**: Vector database for threat intelligence RAG
 - **Prometheus**: Metrics collection and monitoring
 - **Grafana**: Real-time visualization dashboards
-- **OpenAI GPT-4o-mini**: Selective AI-powered threat analysis (opt-in, high-threat events only)
 - **Statistical Models**: 5-dimensional anomaly scoring
 
 ### Build Tools
@@ -146,9 +157,17 @@ docker-compose up -d zookeeper kafka prometheus grafana kafka-ui
 curl "http://localhost:8081/api/events/recent?limit=5" | jq
 curl "http://localhost:8081/api/anomalies/recent?limit=2" | jq
 
-# 5. Access monitoring
+# 5. (Optional) Start GenAI Assistant for natural language queries
+docker-compose up -d genai-assistant
+# Then try:
+curl -X POST http://localhost:8002/query \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What happened in the last hour?"}'
+
+# 6. Access monitoring
 open http://localhost:3000  # Grafana (admin/admin)
 open http://localhost:8090  # Kafka UI
+open http://localhost:8002/docs  # GenAI Assistant API docs
 ```
 
 For detailed setup instructions, see [docs/product/guides/QUICK_START.md](docs/product/guides/QUICK_START.md)
@@ -167,11 +186,12 @@ For detailed setup instructions, see [docs/product/guides/QUICK_START.md](docs/p
 ✅ **Real-time detection** - Sub-millisecond anomaly identification  
 ✅ **Configurable thresholds** - Tunable sensitivity for different scenarios
 
-### AI Integration
+### AI Integration (Sprint 6 & 8)
 ✅ **Selective AI analysis** - Opt-in GPT-4o-mini for high-threat/anomalous events only
 ✅ **Cost-conscious design** - Analyzes only 3-5% of events (threat_score >= 0.7 OR anomaly)
-✅ **Interactive startup** - Prompts user to enable AI (default: disabled)
-✅ **Contextual insights** - Natural language security explanations
+✅ **RAG Service** - Threat intelligence retrieval with ChromaDB vector search
+✅ **Conversational Interface** - Natural language queries via GenAI Assistant (NEW)
+✅ **Multi-source synthesis** - Combines events, threat intel, and anomaly data
 ✅ **Graceful degradation** - System works without AI if disabled or unavailable
 
 ### Observability
@@ -200,6 +220,15 @@ streamguard/
 │   └── build/             # Build artifacts
 ├── query-api/             # Java/Spring Boot REST API
 │   └── src/main/java/     # API controllers
+├── genai-assistant/       # AI Security Assistant (FastAPI)
+│   ├── app/               # FastAPI application
+│   │   ├── services/      # Service clients (Java API, RAG)
+│   │   └── prompts/       # Prompt engineering
+│   ├── Dockerfile         # Container definition
+│   └── requirements.txt   # Python dependencies
+├── rag-service/           # Threat Intelligence RAG
+│   ├── main.py            # FastAPI RAG service
+│   └── seed_threats.py    # Knowledge base seeding
 ├── scripts/               # Automation scripts (Sprint 5)
 │   ├── start-event-generator.sh
 │   ├── start-stream-processor.sh
