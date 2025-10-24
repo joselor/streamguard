@@ -43,3 +43,4 @@ secrets/
 logs/
 
 test-data/
+.junie/

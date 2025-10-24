@@ -96,7 +96,7 @@ graph TB
     KC --> ED
     ED --> VLD
     VLD -->|All Events| AD
-    VLD -->|Selective (if enabled)| AIA
+    VLD -->|Selective if enabled| AIA
     VLD -->|All Events| ES
 
     AD -->|Anomaly Results| ES
@@ -247,7 +247,7 @@ graph LR
         subgraph "Docker Compose Stack"
             K[Kafka<br/>Port 9092]
             Z[Zookeeper<br/>Port 2181]
-            SP[Stream Processor<br/>Metrics: 8080]
+            SP[Stream Processor<br/>Metrics=8080]
             QA[Query API<br/>Port 8081]
             P[Prometheus<br/>Port 9090]
             G[Grafana<br/>Port 3000]

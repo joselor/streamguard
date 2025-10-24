@@ -115,6 +115,26 @@ brew list curl &> /dev/null || brew install curl
 echo "✓ wget and curl installed"
 echo ""
 
+# Install prometheus-cpp (for metrics)
+echo "Installing prometheus-cpp..."
+if ! brew list prometheus-cpp &> /dev/null; then
+    brew install prometheus-cpp
+    echo "✓ prometheus-cpp installed"
+else
+    echo "✓ prometheus-cpp already installed"
+fi
+echo ""
+
+# Install Maven (for Java builds)
+echo "Installing Maven..."
+if ! brew list maven &> /dev/null; then
+    brew install maven
+    echo "✓ Maven installed"
+else
+    echo "✓ Maven already installed"
+fi
+echo ""
+
 # Add library paths to shell config if not already present
 echo "Configuring library paths..."
 if ! grep -q "DYLD_LIBRARY_PATH" ~/.zshrc; then
@@ -144,7 +164,8 @@ echo "⚠️  IMPORTANT: Restart your terminal or run:"
 echo "   source ~/.zshrc"
 echo ""
 echo "Next steps:"
-echo "1. Restart terminal"
-echo "2. Run ./scripts/verify-setup.sh to verify installation"
-echo "3. Run ./scripts/init-project.sh to create project structure"
-echo "4. Start infrastructure: docker-compose up -d"
+echo "1. Restart terminal or run: source ~/.zshrc"
+echo "2. Run ./scripts/verify_setup.sh to verify installation"
+echo "3. Start infrastructure: docker-compose up -d"
+echo "4. Build components: cd stream-processor && mkdir build && cd build && cmake .. && make"
+echo "5. See docs/final/guides/QUICK_START.md for complete setup guide"

@@ -48,11 +48,13 @@ check_command "cmake" "cmake"
 echo ""
 
 # Check libraries
-echo "Checking libraries..."
+echo "Checking C++ libraries..."
 pkg-config --exists rocksdb 2>/dev/null && echo -e "  ${GREEN}✓${NC} RocksDB: OK" || echo -e "  ${RED}✗${NC} RocksDB: MISSING"
 pkg-config --exists rdkafka 2>/dev/null && echo -e "  ${GREEN}✓${NC} librdkafka: OK" || echo -e "  ${RED}✗${NC} librdkafka: MISSING"
 check_file "/opt/homebrew/include/nlohmann/json.hpp" "nlohmann-json"
 check_file "/opt/homebrew/include/gtest/gtest.h" "Google Test"
+# Check for prometheus-cpp (optional but recommended)
+brew list prometheus-cpp &> /dev/null && echo -e "  ${GREEN}✓${NC} prometheus-cpp: OK" || echo -e "  ${RED}⚠${NC}  prometheus-cpp: MISSING (optional, for metrics)"
 echo ""
 
 # Check Docker
@@ -76,6 +78,9 @@ echo "Verification Complete"
 echo "==================================="
 echo ""
 echo "Next steps:"
-echo "1. Install any missing dependencies"
-echo "2. Run ./scripts/init-project.sh to create project structure"
-echo "3. Run docker-compose up -d to start infrastructure"
+echo "1. If any dependencies are missing, run: ./scripts/install_deps.sh"
+echo "2. Start infrastructure: docker-compose up -d"
+echo "3. Build stream-processor: cd stream-processor && mkdir -p build && cd build && cmake .. && make"
+echo "4. Build event-generator: cd event-generator && mvn clean package"
+echo "5. Build query-api: cd query-api && mvn clean package"
+echo "6. See docs/final/guides/QUICK_START.md for complete setup guide"

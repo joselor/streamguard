@@ -16,7 +16,7 @@
 
 **Lambda Architecture | Real-Time + Batch Processing | AI-Powered Threat Detection**
 
-[Architecture](docs/final/guides/ARCHITECTURE.md) • [Quick Start](docs/final/guides/QUICK_START.md) • [E2E Testing](docs/END_TO_END_TESTING.md) • [Spark Integration](docs/SPARK_INTEGRATION.md) • [API Docs](docs/final/api/API_REFERENCE.md)
+[Architecture](docs/product/guides/ARCHITECTURE.md) • [Quick Start](docs/product/guides/QUICK_START.md) • [E2E Testing](docs/development/END_TO_END_TESTING.md) • [Spark Integration](docs/integrations/SPARK_INTEGRATION.md) • [API Docs](docs/product/api/API_REFERENCE.md)
 
 </div>
 
@@ -134,7 +134,7 @@ git clone https://github.com/joselor/streamguard.git
 cd streamguard
 
 # 2. Start infrastructure (Kafka, Prometheus, Grafana)
-docker-compose up -d
+docker-compose up -d zookeeper kafka prometheus grafana kafka-ui
 
 # 3. Build and start components (using Sprint 5 scripts)
 ./scripts/start-event-generator.sh    # Generates test events
@@ -151,7 +151,7 @@ open http://localhost:3000  # Grafana (admin/admin)
 open http://localhost:8090  # Kafka UI
 ```
 
-For detailed setup instructions, see [docs/final/guides/QUICK_START.md](docs/final/guides/QUICK_START.md)
+For detailed setup instructions, see [docs/product/guides/QUICK_START.md](docs/product/guides/QUICK_START.md)
 
 ---
 
@@ -205,8 +205,10 @@ streamguard/
 │   ├── start-stream-processor.sh
 │   └── start-query-api.sh
 ├── docs/                  # Comprehensive documentation
-│   ├── final/             # Sprint 3 documentation
-│   └── PROJECT_HANDOFF_SPRINT5.md
+│   ├── product/           # User-facing product documentation
+│   ├── sprints/           # Sprint handoff history (Sprint 1-7)
+│   ├── development/       # Developer guides and testing
+│   └── integrations/      # Advanced integration docs
 ├── docker-compose.yml     # Infrastructure definition
 └── .env.example          # Configuration template
 ```
@@ -216,19 +218,19 @@ streamguard/
 ## 📖 Documentation
 
 ### Getting Started
-- [Quick Start Guide](docs/final/guides/QUICK_START.md) - 10-minute setup
-- [Architecture Overview](docs/final/guides/ARCHITECTURE.md) - System design deep-dive
-- [AI/ML Components](docs/final/guides/AI_ML.md) - Anomaly detection explained
+- [Quick Start Guide](docs/product/guides/QUICK_START.md) - 10-minute setup
+- [Architecture Overview](docs/product/guides/ARCHITECTURE.md) - System design deep-dive
+- [AI/ML Components](docs/product/guides/AI_ML.md) - Anomaly detection explained
 
 ### Reference
-- [API Reference](docs/final/api/API_REFERENCE.md) - Complete REST API documentation
-- [Deployment Guide](docs/final/guides/DEPLOYMENT.md) - Docker, Kubernetes, AWS
-- [Troubleshooting](docs/final/guides/TROUBLESHOOTING.md) - Common issues & solutions
+- [API Reference](docs/product/api/API_REFERENCE.md) - Complete REST API documentation
+- [Deployment Guide](docs/product/guides/DEPLOYMENT.md) - Docker, Kubernetes, AWS
+- [Troubleshooting](docs/product/guides/TROUBLESHOOTING.md) - Common issues & solutions
 
 ### Diagrams
-- [Component Diagram](docs/final/diagrams/COMPONENT_DIAGRAM.md) - Architecture visualization
-- [Data Flow](docs/final/diagrams/DATA_FLOW_ANIMATION.md) - ByteByGo-style animation
-- [Class Diagrams](docs/final/diagrams/CLASS_DIAGRAMS.md) - UML class structure
+- [Component Diagram](docs/product/diagrams/COMPONENT_DIAGRAM.md) - Architecture visualization
+- [Data Flow](docs/product/diagrams/DATA_FLOW_ANIMATION.md) - ByteByGo-style animation
+- [Class Diagrams](docs/product/diagrams/CLASS_DIAGRAMS.md) - UML class structure
 
 ---
 

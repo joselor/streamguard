@@ -182,6 +182,9 @@ int main(int argc, char* argv[]) {
                     // Store AI analysis in RocksDB
                     if (store.putAnalysis(*analysis)) {
                         std::cout << "[AI] ✓ Stored AI analysis for event: " << event.event_id << std::endl;
+
+                        // Report AI-detected threat to Prometheus metrics
+                        metrics.incrementThreatsDetected(analysis->severity);
                     } else {
                         std::cerr << "[AI] Failed to store AI analysis for event: " << event.event_id << std::endl;
                     }

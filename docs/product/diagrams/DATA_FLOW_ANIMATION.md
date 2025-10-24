@@ -1,4 +1,4 @@
-# StreamGuard Data Flow Animation (ByteByGo Style)
+# StreamGuard Data Flow Animation
 
 ## Real-Time Event Processing Flow
 
@@ -14,13 +14,13 @@ sequenceDiagram
     participant Consumer as Kafka Consumer<br/>librdkafka
     participant Deserializer as Event Deserializer<br/>JSON Parser
 
-    rect rgb(224, 31, 39, 0.1)
+    rect rgb(255, 240, 240)
         Note over Source,Deserializer: PHASE 1: Event Ingestion (1-5ms)
-        Source->>Kafka: Publish security event<br/>{user, timestamp, type, ip, ...}
-        Note right of Kafka: Event stored in partition<br/>Offset: 12345
+        Source->>Kafka: Publish security event<br/>(user, timestamp, type, ip, ...)
+        Note right of Kafka: Event stored in partition<br/>Offset=12345
         Consumer->>Kafka: Poll for new messages<br/>(batch size: 100)
         Kafka-->>Consumer: Return event batch
-        Note right of Consumer: Acknowledge offset<br/>Group: stream-processor
+        Note right of Consumer: Acknowledge offset<br/>Group=stream-processor
         Consumer->>Deserializer: Raw JSON bytes
         Deserializer->>Deserializer: Parse & validate schema
         Note right of Deserializer: Event object created<br/>Ready for processing
@@ -37,7 +37,7 @@ sequenceDiagram
 ```mermaid
 flowchart TB
     subgraph Input["Event Validated ✓"]
-        E[Security Event<br/>user: alice<br/>ip: 10.0.1.50<br/>type: LOGIN_FAILED]
+        E[Security Event<br/>user=alice<br/>ip=10.0.1.50<br/>type=LOGIN_FAILED]
         style E fill:#E01F27,stroke:#1A1D21,color:#fff
     end
 
@@ -46,10 +46,10 @@ flowchart TB
 
         subgraph Anomaly["Anomaly Detection"]
             direction TB
-            A1[Load user baseline<br/>alice: 127 events]
-            A2[Calculate probabilities<br/>Time: 0.15<br/>IP: 0.02<br/>Location: 0.08]
+            A1[Load user baseline<br/>alice=127 events]
+            A2[Calculate probabilities<br/>Time=0.15<br/>IP=0.02<br/>Location=0.08]
             A3[Compute composite score<br/>0.73 - MEDIUM]
-            A4[Store anomaly result<br/>Column Family: anomalies]
+            A4[Store anomaly result<br/>Column Family=anomalies]
             style A1 fill:#1A1D21,stroke:#E01F27,color:#fff
             style A2 fill:#1A1D21,stroke:#E01F27,color:#fff
             style A3 fill:#E01F27,stroke:#1A1D21,color:#fff
@@ -60,10 +60,10 @@ flowchart TB
         subgraph AI["AI Threat Analysis (SELECTIVE)"]
             direction TB
             B0{Check Trigger<br/>threat >= 0.7<br/>OR anomaly?}
-            B1[Prepare event context<br/>Recent failures: 3<br/>Known IPs: 5]
-            B2[Call OpenAI API<br/>Model: GPT-4o-mini]
-            B3[Parse AI response<br/>Severity: MEDIUM<br/>Confidence: 0.85]
-            B4[Store analysis<br/>Column Family: ai_analysis]
+            B1[Prepare event context<br/>Recent failures=3<br/>Known IPs=5]
+            B2[Call OpenAI API<br/>Model=GPT-4o-mini]
+            B3[Parse AI response<br/>Severity=MEDIUM<br/>Confidence=0.85]
+            B4[Store analysis<br/>Column Family=ai_analysis]
             SKIP[Skip AI Analysis<br/>Cost savings]
             style B0 fill:#E01F27,stroke:#1A1D21,color:#fff
             style B1 fill:#1A1D21,stroke:#E01F27,color:#fff
@@ -79,13 +79,13 @@ flowchart TB
 
     subgraph Storage["RocksDB Storage"]
         direction TB
-        S1[Store raw event<br/>CF: default<br/>Key: timestamp:event_id]
+        S1[Store raw event<br/>CF=default<br/>Key=timestamp_event_id]
         style S1 fill:#2A2D31,stroke:#E01F27,color:#fff
     end
 
     subgraph Metrics["Metrics Export"]
         M1[Increment counters<br/>events_processed++<br/>anomalies_detected++]
-        M2[Record histograms<br/>anomaly_score: 0.73<br/>processing_time: 45ms]
+        M2[Record histograms<br/>anomaly_score=0.73<br/>processing_time=45ms]
         style M1 fill:#E01F27,stroke:#1A1D21,color:#fff
         style M2 fill:#E01F27,stroke:#1A1D21,color:#fff
         M1 --> M2
@@ -114,28 +114,28 @@ graph TB
     subgraph RocksDB["RocksDB Database File"]
         direction TB
 
-        subgraph CF1["Column Family: default"]
-            E1[Key: 1696723200000:evt_001<br/>Value: {raw event JSON}]
-            E2[Key: 1696723201000:evt_002<br/>Value: {raw event JSON}]
-            E3[Key: 1696723202000:evt_003<br/>Value: {raw event JSON}]
+        subgraph CF1[Column Family_default]
+            E1["Key = 1696723200000_evt_001<br/>Value = raw event JSON"]
+            E2["Key = 1696723201000_evt_002<br/>Value = raw event JSON"]
+            E3["Key = 1696723202000_evt_003<br/>Value = raw event JSON"]
             style E1 fill:#2A2D31,stroke:#E01F27,color:#fff
             style E2 fill:#2A2D31,stroke:#E01F27,color:#fff
             style E3 fill:#2A2D31,stroke:#E01F27,color:#fff
         end
 
-        subgraph CF2["Column Family: ai_analysis"]
-            A1[Key: evt_001<br/>Value: {severity: MEDIUM, ...}]
-            A2[Key: evt_002<br/>Value: {severity: HIGH, ...}]
-            A3[Key: evt_003<br/>Value: {severity: LOW, ...}]
+        subgraph CF2[Column Family_ai_analysis]
+            A1["Key = evt_001<br/>Value = severity MEDIUM"]
+            A2["Key = evt_002<br/>Value = severity HIGH"]
+            A3["Key = evt_003<br/>Value = severity LOW"]
             style A1 fill:#2A2D31,stroke:#E01F27,color:#fff
             style A2 fill:#2A2D31,stroke:#E01F27,color:#fff
             style A3 fill:#2A2D31,stroke:#E01F27,color:#fff
         end
 
-        subgraph CF3["Column Family: anomalies"]
-            AN1[Key: 1696723200000:evt_001<br/>Value: {anomaly_score: 0.73, ...}]
-            AN2[Key: 1696723201000:evt_002<br/>Value: {anomaly_score: 0.91, ...}]
-            AN3[Key: 1696723202000:evt_003<br/>Value: {anomaly_score: 0.15, ...}]
+        subgraph CF3[Column Family_anomalies]
+            AN1["Key = 1696723200000_evt_001<br/>Value = anomaly_score 0.73"]
+            AN2["Key = 1696723201000_evt_002<br/>Value = anomaly_score 0.91"]
+            AN3["Key = 1696723202000_evt_003<br/>Value = anomaly_score 0.15"]
             style AN1 fill:#2A2D31,stroke:#E01F27,color:#fff
             style AN2 fill:#2A2D31,stroke:#E01F27,color:#fff
             style AN3 fill:#2A2D31,stroke:#E01F27,color:#fff
@@ -169,12 +169,12 @@ sequenceDiagram
     participant DB as RocksDB Database
     participant Cache as Block Cache<br/>(Memory)
 
-    rect rgb(224, 31, 39, 0.1)
+    rect rgb(255, 240, 240)
         Note over Client,Cache: PHASE 4: Query Execution (5-100ms)
         Client->>Controller: GET /api/anomalies/high-score?threshold=0.7
-        Note right of Client: HTTP Request<br/>Headers: Accept: application/json
+        Note right of Client: HTTP Request<br/>Headers = Accept application/json
 
-        Controller->>Controller: Validate parameters<br/>threshold ∈ [0.0, 1.0]
+        Controller->>Controller: Validate parameters<br/>threshold in [0.0, 1.0]
         Controller->>Service: getHighScoreAnomalies(0.7, 100)
 
         Service->>DB: Create iterator on anomalies CF
@@ -203,7 +203,7 @@ sequenceDiagram
 
         Service-->>Controller: List<AnomalyResult> (filtered)
         Controller->>Controller: Serialize to JSON<br/>Apply pagination headers
-        Controller-->>Client: HTTP 200 OK<br/>[{anomaly_score: 0.91, ...}, ...]
+        Controller-->>Client: HTTP 200 OK<br/>[(anomaly_score=0.91, ...), ...]
     end
 ```
 
