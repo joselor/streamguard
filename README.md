@@ -147,25 +147,28 @@ cd streamguard
 # 2. Start infrastructure (Kafka, Prometheus, Grafana)
 docker-compose up -d zookeeper kafka prometheus grafana kafka-ui
 
-# 3. Build and start components (using Sprint 5 scripts)
+# 3. Build and start components (using Sprint 5/9 scripts)
 ./scripts/start-event-generator.sh    # Generates test events
 ./scripts/start-stream-processor.sh   # Processes events in C++
                                        # Note: Will prompt to enable AI analysis (default: no)
 ./scripts/start-query-api.sh          # REST API for queries
 
-# 4. Verify system is working
+# 4. (Optional) Start GenAI Assistant for natural language queries
+./scripts/start-genai-assistant.sh    # AI Security Assistant
+                                       # Supports OpenAI or Ollama (local models)
+                                       # Configure via LLM_PROVIDER in .env
+
+# 5. Verify system is working
 curl "http://localhost:8081/api/events/recent?limit=5" | jq
 curl "http://localhost:8081/api/anomalies/recent?limit=2" | jq
 
-# 5. (Optional) Start GenAI Assistant for natural language queries
-docker-compose up -d genai-assistant
-# Then try:
+# Test GenAI Assistant (if started)
 curl -X POST http://localhost:8002/query \
   -H "Content-Type: application/json" \
   -d '{"question": "What happened in the last hour?"}'
 
 # 6. Access monitoring
-open http://localhost:3000  # Grafana (admin/admin)
+open http://localhost:3000  # Grafana (admin/admin) - Now includes GenAI metrics!
 open http://localhost:8090  # Kafka UI
 open http://localhost:8002/docs  # GenAI Assistant API docs
 ```
@@ -186,17 +189,21 @@ For detailed setup instructions, see [docs/product/guides/QUICK_START.md](docs/p
 ✅ **Real-time detection** - Sub-millisecond anomaly identification  
 ✅ **Configurable thresholds** - Tunable sensitivity for different scenarios
 
-### AI Integration (Sprint 6 & 8)
+### AI Integration (Sprint 6, 8 & 9)
 ✅ **Selective AI analysis** - Opt-in GPT-4o-mini for high-threat/anomalous events only
 ✅ **Cost-conscious design** - Analyzes only 3-5% of events (threat_score >= 0.7 OR anomaly)
+✅ **Local model support** - Ollama integration for cost-free demos (Sprint 9 NEW)
+✅ **Provider flexibility** - Switch between OpenAI and Ollama via configuration
 ✅ **RAG Service** - Threat intelligence retrieval with ChromaDB vector search
-✅ **Conversational Interface** - Natural language queries via GenAI Assistant (NEW)
+✅ **Conversational Interface** - Natural language queries via GenAI Assistant
 ✅ **Multi-source synthesis** - Combines events, threat intel, and anomaly data
+✅ **Production observability** - Prometheus metrics + Grafana dashboard for GenAI (Sprint 9 NEW)
 ✅ **Graceful degradation** - System works without AI if disabled or unavailable
 
-### Observability
-✅ **Prometheus metrics** - Throughput, latency, anomaly rates  
-✅ **Grafana dashboards** - Real-time visualization  
+### Observability (Sprint 9 Enhanced)
+✅ **Prometheus metrics** - Throughput, latency, anomaly rates, AI costs, token usage
+✅ **Grafana dashboards** - Real-time visualization (now includes GenAI metrics!)
+✅ **AI cost tracking** - Real-time OpenAI cost estimation and monitoring
 ✅ **Comprehensive logging** - Structured logging for debugging
 
 ### Configuration Management (Sprint 5)

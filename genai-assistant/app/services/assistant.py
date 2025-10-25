@@ -4,7 +4,6 @@ Core AI Security Assistant Logic
 Orchestrates data gathering from multiple sources and LLM synthesis.
 """
 
-from openai import AsyncOpenAI
 from app.config import settings
 from app.services.java_api import JavaAPIClient
 from app.services.rag_client import RAGClient
@@ -12,6 +11,8 @@ from app.prompts.system_prompts import (
     SECURITY_ASSISTANT_SYSTEM_PROMPT,
     create_query_prompt
 )
+from app.llm.factory import LLMFactory
+from app.utils import metrics
 import time
 import logging
 import re
@@ -31,9 +32,15 @@ class SecurityAssistant:
     """
 
     def __init__(self):
-        self.openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+        # Initialize LLM provider from settings
+        self.llm = LLMFactory.create_from_settings(settings)
         self.java_api = JavaAPIClient()
         self.rag_client = RAGClient()
+
+        logger.info(
+            f"SecurityAssistant initialized with {settings.llm_provider} provider "
+            f"(model: {self.llm.get_model_name()})"
+        )
 
     async def answer_query(
         self,
@@ -58,55 +65,82 @@ class SecurityAssistant:
         logger.info(f"Processing query: '{question}' with context: {context_window}")
 
         try:
-            # Phase 1: Gather context from multiple sources (parallel where possible)
-            events, threat_intel = await self._gather_context(
-                question,
-                context_window,
-                user_id,
-                include_threat_intel
-            )
+            with metrics.track_query_duration("/query", "success"):
+                # Phase 1: Gather context from multiple sources (parallel where possible)
+                events, threat_intel = await self._gather_context(
+                    question,
+                    context_window,
+                    user_id,
+                    include_threat_intel
+                )
 
-            # Phase 2: Get anomaly information if available
-            anomalies = await self._get_anomaly_context(user_id)
+                # Phase 2: Get anomaly information if available
+                anomalies = await self._get_anomaly_context(user_id)
 
-            # Phase 3: Build prompt with all context
-            prompt = create_query_prompt(question, events, threat_intel, anomalies)
+                # Phase 3: Build prompt with all context
+                prompt = create_query_prompt(question, events, threat_intel, anomalies)
 
-            # Phase 4: Call OpenAI for synthesis
-            logger.info("Calling OpenAI API for answer synthesis")
-            response = await self.openai_client.chat.completions.create(
-                model=settings.openai_model,
-                messages=[
-                    {"role": "system", "content": SECURITY_ASSISTANT_SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=settings.openai_temperature,
-                max_tokens=settings.openai_max_tokens
-            )
+                # Phase 4: Call LLM for synthesis
+                logger.info(f"Calling {settings.llm_provider} LLM for answer synthesis")
 
-            answer = response.choices[0].message.content
-            query_time_ms = int((time.time() - start_time) * 1000)
+                # Determine temperature and max_tokens from settings based on provider
+                if settings.llm_provider == "openai":
+                    temperature = settings.openai_temperature
+                    max_tokens = settings.openai_max_tokens
+                else:  # ollama
+                    temperature = settings.ollama_temperature
+                    max_tokens = settings.ollama_max_tokens
 
-            # Phase 5: Extract structured information from answer
-            recommendations = self._extract_recommendations(answer)
-            confidence = self._estimate_confidence(events, threat_intel, anomalies)
+                with metrics.track_openai_call(self.llm.get_model_name()):
+                    response = await self.llm.complete(
+                        messages=[
+                            {"role": "system", "content": SECURITY_ASSISTANT_SYSTEM_PROMPT},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=temperature,
+                        max_tokens=max_tokens
+                    )
 
-            # Phase 6: Build response
-            result = {
-                "answer": answer,
-                "confidence": confidence,
-                "supporting_events": self._format_supporting_events(events),
-                "threat_intel": self._format_threat_intel(threat_intel),
-                "recommended_actions": recommendations,
-                "query_time_ms": query_time_ms,
-                "sources_used": self._get_sources_used(events, threat_intel)
-            }
+                # Record token usage (works for both OpenAI and Ollama)
+                metrics.record_openai_usage(
+                    model=response.model,
+                    prompt_tokens=response.prompt_tokens,
+                    completion_tokens=response.completion_tokens
+                )
 
-            logger.info(f"Query completed in {query_time_ms}ms")
-            return result
+                answer = response.content
+                query_time_ms = int((time.time() - start_time) * 1000)
+
+                # Phase 5: Extract structured information from answer
+                recommendations = self._extract_recommendations(answer)
+                confidence = self._estimate_confidence(events, threat_intel, anomalies)
+
+                # Phase 6: Build response
+                result = {
+                    "answer": answer,
+                    "confidence": confidence,
+                    "supporting_events": self._format_supporting_events(events),
+                    "threat_intel": self._format_threat_intel(threat_intel),
+                    "recommended_actions": recommendations,
+                    "query_time_ms": query_time_ms,
+                    "sources_used": self._get_sources_used(events, threat_intel)
+                }
+
+                # Record query metrics
+                metrics.record_query_metrics(
+                    confidence=confidence,
+                    supporting_events=len(events),
+                    threat_intel=len(threat_intel),
+                    include_threat_intel=include_threat_intel
+                )
+
+                logger.info(f"Query completed in {query_time_ms}ms")
+                return result
 
         except Exception as e:
             logger.error(f"Error processing query: {str(e)}", exc_info=True)
+            metrics.record_error("internal")
+            # Re-record with error status (the context manager will have already recorded it as error)
             raise
 
     async def _gather_context(
@@ -118,26 +152,28 @@ class SecurityAssistant:
     ) -> tuple:
         """Gather context from Java API and RAG service"""
 
-        # Fetch events
-        if user_id:
-            events = await self.java_api.get_events_by_user(
-                user_id,
-                limit=settings.max_supporting_events,
-                time_window=context_window
-            )
-        else:
-            events = await self.java_api.get_events(
-                limit=settings.max_supporting_events,
-                time_window=context_window
-            )
+        # Fetch events (with metrics tracking)
+        with metrics.track_data_source_call("java_api"):
+            if user_id:
+                events = await self.java_api.get_events_by_user(
+                    user_id,
+                    limit=settings.max_supporting_events,
+                    time_window=context_window
+                )
+            else:
+                events = await self.java_api.get_events(
+                    limit=settings.max_supporting_events,
+                    time_window=context_window
+                )
 
-        # Fetch threat intelligence (if enabled)
+        # Fetch threat intelligence (if enabled, with metrics tracking)
         threat_intel = []
         if include_threat_intel:
-            threat_intel = await self.rag_client.query_threat_intel(
-                query=question,
-                top_k=settings.max_threat_intel_results
-            )
+            with metrics.track_data_source_call("rag_service"):
+                threat_intel = await self.rag_client.query_threat_intel(
+                    query=question,
+                    top_k=settings.max_threat_intel_results
+                )
 
         logger.info(f"Gathered {len(events)} events and {len(threat_intel)} threat intel results")
         return events, threat_intel

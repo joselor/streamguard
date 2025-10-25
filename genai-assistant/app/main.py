@@ -6,7 +6,7 @@ FastAPI application providing natural language interface to security data.
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from contextlib import asynccontextmanager
 from datetime import datetime
 import logging
@@ -15,6 +15,7 @@ import sys
 from app.config import settings
 from app.models import QueryRequest, QueryResponse, HealthCheck, ErrorResponse
 from app.services import SecurityAssistant, JavaAPIClient, RAGClient
+from app.utils import metrics
 
 # Configure logging
 logging.basicConfig(
@@ -35,7 +36,7 @@ async def lifespan(app: FastAPI):
     """Lifecycle manager - initializes services on startup"""
     global assistant, java_api, rag_client
 
-    logger.info("=€ Starting AI Security Assistant")
+    logger.info("=ï¿½ Starting AI Security Assistant")
     logger.info(f"Service: {settings.service_host}:{settings.service_port}")
     logger.info(f"OpenAI Model: {settings.openai_model}")
     logger.info(f"Java API: {settings.java_api_url}")
@@ -47,14 +48,20 @@ async def lifespan(app: FastAPI):
         java_api = JavaAPIClient()
         rag_client = RAGClient()
         logger.info(" All services initialized successfully")
+
+        # Initialize metrics
+        metrics.set_service_status(True)
+        logger.info("âœ“ Metrics initialized")
     except Exception as e:
         logger.error(f" Failed to initialize services: {str(e)}")
+        metrics.set_service_status(False)
         raise
 
     yield
 
     # Cleanup
     logger.info("Shutting down AI Security Assistant")
+    metrics.set_service_status(False)
 
 
 # Create FastAPI app
@@ -195,6 +202,9 @@ async def health_check():
         logger.error(f"Java API health check failed: {str(e)}")
         services_status["java_api"] = False
 
+    # Update metric
+    metrics.update_dependency_health("java_api", services_status["java_api"])
+
     # Check RAG Service
     try:
         if rag_client:
@@ -205,8 +215,24 @@ async def health_check():
         logger.error(f"RAG service health check failed: {str(e)}")
         services_status["rag_service"] = False
 
-    # Check OpenAI (assume healthy if API key configured)
-    services_status["openai"] = bool(settings.openai_api_key)
+    # Update metric
+    metrics.update_dependency_health("rag_service", services_status["rag_service"])
+
+    # Check LLM provider (OpenAI or Ollama)
+    try:
+        if assistant and hasattr(assistant, 'llm'):
+            services_status[settings.llm_provider] = await assistant.llm.health_check()
+        else:
+            # Fallback: assume healthy if configured
+            if settings.llm_provider == "openai":
+                services_status["openai"] = bool(settings.openai_api_key)
+            else:
+                services_status["ollama"] = True
+    except Exception as e:
+        logger.error(f"LLM provider health check failed: {str(e)}")
+        services_status[settings.llm_provider] = False
+
+    metrics.update_dependency_health(settings.llm_provider, services_status.get(settings.llm_provider, False))
 
     # Overall status
     all_healthy = all(services_status.values())
@@ -220,22 +246,25 @@ async def health_check():
     )
 
 
-# Metrics endpoint (placeholder for Prometheus)
+# Metrics endpoint for Prometheus
 @app.get(
     "/metrics",
     summary="Prometheus Metrics",
-    description="Metrics endpoint for monitoring (placeholder)"
+    description="Prometheus-compatible metrics endpoint for monitoring"
 )
-async def metrics():
+async def get_metrics():
     """
     Prometheus-compatible metrics endpoint
 
-    TODO: Implement prometheus_client integration
+    Returns metrics in Prometheus text format including:
+    - Query performance and latency
+    - OpenAI API usage and costs
+    - Error tracking
+    - Data source performance
+    - AI response quality
     """
-    return {
-        "note": "Metrics endpoint placeholder",
-        "todo": "Implement prometheus_client for production metrics"
-    }
+    content, content_type = metrics.get_metrics()
+    return Response(content=content, media_type=content_type)
 
 
 # Run with uvicorn

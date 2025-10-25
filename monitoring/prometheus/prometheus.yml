@@ -31,6 +31,13 @@ scrape_configs:
     metrics_path: '/actuator/prometheus'
     scrape_interval: 10s
 
+  # GenAI Assistant metrics (FastAPI application)
+  - job_name: 'genai-assistant'
+    static_configs:
+      - targets: ['host.docker.internal:8002']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
   # Kafka JMX metrics (disabled - JMX exporter not configured)
   # - job_name: 'kafka'
   #   static_configs:

@@ -51,12 +51,30 @@ User Query (Natural Language)
 ### Prerequisites
 
 - Python 3.11+
-- OpenAI API key
+- **LLM Provider** (choose one):
+  - **OpenAI**: API key required
+  - **Ollama**: Local installation (FREE, no API key needed)
 - Running StreamGuard services:
   - Java API (port 8081)
-  - RAG Service (port 8000)
+  - RAG Service (port 8000) - optional
 
-### Installation
+### Quick Start with Startup Script (Recommended)
+
+The easiest way to start the GenAI Assistant:
+
+```bash
+# From project root
+./scripts/start-genai-assistant.sh
+```
+
+This script will:
+- ✅ Validate all dependencies
+- ✅ Check LLM provider configuration
+- ✅ Create virtual environment if needed
+- ✅ Install dependencies
+- ✅ Start the service
+
+### Manual Installation
 
 1. **Clone and navigate**
    ```bash
@@ -65,13 +83,15 @@ User Query (Natural Language)
 
 2. **Install dependencies**
    ```bash
+   python3 -m venv venv
+   source venv/bin/activate
    pip install -r requirements.txt
    ```
 
 3. **Configure environment**
    ```bash
    cp .env.example .env
-   # Edit .env and add your OPENAI_API_KEY
+   # Edit .env and configure your LLM provider (see Configuration section)
    ```
 
 4. **Run the service**
@@ -207,22 +227,110 @@ curl -X POST http://localhost:8002/query \
 
 All configuration via environment variables (see `.env.example`):
 
-### Required Settings
-- `OPENAI_API_KEY` - Your OpenAI API key
+### LLM Provider Selection
+- `LLM_PROVIDER` - Choose "openai" or "ollama" (default: openai)
 
 ### Service Configuration
 - `SERVICE_HOST` - Host to bind (default: 0.0.0.0)
 - `SERVICE_PORT` - Port to listen (default: 8002)
 - `LOG_LEVEL` - Logging level (default: INFO)
 
-### OpenAI Settings
+### OpenAI Settings (when LLM_PROVIDER=openai)
+- `OPENAI_API_KEY` - Your OpenAI API key (required for OpenAI)
 - `OPENAI_MODEL` - Model to use (default: gpt-4o-mini)
 - `OPENAI_TEMPERATURE` - Creativity (default: 0.7)
 - `OPENAI_MAX_TOKENS` - Max response length (default: 1000)
 
+### Ollama Settings (when LLM_PROVIDER=ollama)
+- `OLLAMA_BASE_URL` - Ollama server URL (default: http://localhost:11434)
+- `OLLAMA_MODEL` - Model to use (default: llama3.2:latest)
+- `OLLAMA_TEMPERATURE` - Creativity (default: 0.7)
+- `OLLAMA_MAX_TOKENS` - Max response length (default: 1000)
+
 ### Integration Settings
 - `JAVA_API_URL` - Java API endpoint (default: http://localhost:8081)
 - `RAG_SERVICE_URL` - RAG service endpoint (default: http://localhost:8000)
+
+## Local Model Setup (Ollama)
+
+### Why Use Ollama?
+
+✅ **Zero Cost** - No API fees, unlimited queries
+✅ **Privacy** - All data stays local
+✅ **Fast** - No network latency (25-50% faster potential)
+✅ **Offline** - Works without internet
+
+### Installation
+
+1. **Install Ollama**
+   ```bash
+   # Mac
+   brew install ollama
+
+   # Or download from https://ollama.com
+   ```
+
+2. **Start Ollama Server**
+   ```bash
+   ollama serve
+   ```
+
+3. **Pull a Model**
+   ```bash
+   # Recommended: Llama 3.2 (2GB, good for security analysis)
+   ollama pull llama3.2:latest
+
+   # Alternative: Mistral 7B (4GB, excellent quality)
+   ollama pull mistral:7b
+
+   # Or: DeepSeek-R1 (1.1GB, faster but smaller)
+   ollama pull deepseek-r1:1.5b
+   ```
+
+4. **Verify Model is Available**
+   ```bash
+   ollama list
+   ```
+
+5. **Configure GenAI Assistant**
+   ```bash
+   # In .env file
+   LLM_PROVIDER=ollama
+   OLLAMA_MODEL=llama3.2:latest
+   OLLAMA_BASE_URL=http://localhost:11434
+   ```
+
+6. **Start the Service**
+   ```bash
+   ./scripts/start-genai-assistant.sh
+   ```
+
+### Model Recommendations
+
+| Model | Size | Speed | Quality | Use Case |
+|-------|------|-------|---------|----------|
+| **llama3.2:latest** | 2.0GB | Fast | Excellent | **Recommended** for security analysis |
+| mistral:7b | 4.1GB | Medium | Excellent | High-quality responses |
+| deepseek-r1:1.5b | 1.1GB | Very Fast | Good | Quick demos, limited resources |
+| phi3:medium | 7.9GB | Slow | Very Good | Best quality, needs more RAM |
+
+### Switching Between Providers
+
+**Use OpenAI:**
+```bash
+# In .env
+LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-your-key-here
+```
+
+**Use Ollama:**
+```bash
+# In .env
+LLM_PROVIDER=ollama
+OLLAMA_MODEL=llama3.2:latest
+```
+
+Restart the service after changing providers.
 
 ## Development
 

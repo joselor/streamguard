@@ -16,12 +16,21 @@ class Settings(BaseSettings):
     service_port: int = 8002
     log_level: str = "INFO"
 
-    # OpenAI Configuration
-    openai_api_key: str
+    # LLM Provider Configuration
+    llm_provider: str = "openai"  # "openai" or "ollama"
+
+    # OpenAI Configuration (used when llm_provider="openai")
+    openai_api_key: Optional[str] = None
     openai_model: str = "gpt-4o-mini"
     openai_temperature: float = 0.7
     openai_max_tokens: int = 1000
     openai_timeout: int = 30
+
+    # Ollama Configuration (used when llm_provider="ollama")
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.2:latest"
+    ollama_temperature: float = 0.7
+    ollama_max_tokens: int = 1000
 
     # StreamGuard Services
     java_api_url: str = "http://localhost:8081"
