@@ -11,8 +11,11 @@ This module defines all metrics collected by the GenAI Assistant service:
 
 from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 import time
-from typing import Optional
+from typing import Optional, Dict
 from contextlib import contextmanager
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -151,6 +154,33 @@ OPENAI_PRICING = {
 }
 
 
+def get_model_pricing(model: str) -> Optional[Dict[str, float]]:
+    """
+    Get pricing for a model, matching by family if exact match not found.
+
+    Handles versioned model names like 'gpt-4o-mini-2024-07-18' by matching
+    the base model family 'gpt-4o-mini'.
+
+    Args:
+        model: Full model name from OpenAI API
+
+    Returns:
+        Pricing dict with 'input' and 'output' keys, or None if not found
+    """
+    # Try exact match first
+    if model in OPENAI_PRICING:
+        return OPENAI_PRICING[model]
+
+    # Try matching by prefix (e.g., gpt-4o-mini-2024-07-18 -> gpt-4o-mini)
+    for base_model in OPENAI_PRICING.keys():
+        if model.startswith(base_model):
+            logger.debug(f"Matched model '{model}' to pricing family '{base_model}'")
+            return OPENAI_PRICING[base_model]
+
+    logger.warning(f"No pricing found for model: {model}")
+    return None
+
+
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
@@ -222,20 +252,31 @@ def record_openai_usage(model: str, prompt_tokens: int, completion_tokens: int):
     Record OpenAI token usage and estimate cost
 
     Args:
-        model: Model name (e.g., "gpt-4o-mini")
+        model: Model name (e.g., "gpt-4o-mini" or "gpt-4o-mini-2024-07-18")
         prompt_tokens: Number of input tokens
         completion_tokens: Number of output tokens
     """
+    logger.debug(f"Recording OpenAI usage - model: {model}, prompt: {prompt_tokens}, completion: {completion_tokens}")
+
     # Record token counts
     OPENAI_TOKENS.labels(model=model, token_type="prompt").inc(prompt_tokens)
     OPENAI_TOKENS.labels(model=model, token_type="completion").inc(completion_tokens)
 
-    # Estimate and record cost
-    if model in OPENAI_PRICING:
-        input_cost = prompt_tokens * OPENAI_PRICING[model]['input']
-        output_cost = completion_tokens * OPENAI_PRICING[model]['output']
+    # Estimate and record cost using model family matching
+    pricing = get_model_pricing(model)
+    if pricing:
+        input_cost = prompt_tokens * pricing['input']
+        output_cost = completion_tokens * pricing['output']
         total_cost = input_cost + output_cost
-        OPENAI_COST.labels(model=model).inc(total_cost)
+
+        logger.info(f"OpenAI cost: ${total_cost:.6f} (model: {model}, {prompt_tokens}+{completion_tokens} tokens)")
+
+        # Increment cost counter (use base model name for metric label consistency)
+        # Extract base model for cleaner metrics (e.g., gpt-4o-mini-2024-07-18 -> gpt-4o-mini)
+        base_model = model.split('-202')[0] if '-202' in model else model
+        OPENAI_COST.labels(model=base_model).inc(total_cost)
+    else:
+        logger.warning(f"Cannot calculate cost for unknown model: {model}")
 
 
 def record_query_metrics(

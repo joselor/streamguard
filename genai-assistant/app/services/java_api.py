@@ -77,28 +77,44 @@ class JavaAPIClient:
         time_window: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
-        Fetch events for a specific user
+        Fetch events for a specific user (client-side filtering)
+
+        Note: Java API doesn't support server-side user filtering yet,
+        so we fetch recent events and filter client-side.
 
         Args:
             user_id: User identifier
-            limit: Maximum number of events
+            limit: Maximum number of events (applied after filtering)
             time_window: Time window filter
 
         Returns:
             List of user's security events
         """
-        params = {"limit": limit}
-        if time_window:
-            params["window"] = time_window
+        logger.debug(f"Fetching events for user: {user_id}")
+
+        # Fetch more events than needed since we're filtering client-side
+        fetch_limit = min(limit * 5, 500)  # Fetch 5x to ensure enough results after filtering
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
+                params = {"limit": fetch_limit}
                 response = await client.get(
-                    f"{self.base_url}/api/events/user/{user_id}",
+                    f"{self.base_url}/api/events/recent",
                     params=params
                 )
                 response.raise_for_status()
-                return response.json()
+                all_events = response.json()
+
+                # Client-side filtering by user
+                user_events = [
+                    event for event in all_events
+                    if event.get('user') == user_id
+                ]
+
+                logger.info(f"Filtered {len(user_events)} events for user '{user_id}' from {len(all_events)} total events")
+
+                # Return only requested number of events
+                return user_events[:limit]
 
         except httpx.HTTPStatusError as e:
             logger.error(f"Java API returned error for user {user_id}: {e.response.status_code}")
