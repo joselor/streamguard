@@ -1,0 +1,22 @@
+# StreamGuard Spark ML Pipeline Dependencies
+# Python 3.11+
+
+# Core Dependencies
+setuptools>=65.0.0  # Required for distutils (PySpark dependency)
+
+# Apache Spark
+pyspark==3.5.0
+
+# Machine Learning
+scikit-learn==1.4.0
+
+# Data Processing
+pandas==2.2.0
+numpy==1.26.4  # Pinned for compatibility with ChromaDB/other deps
+
+# Configuration & Logging
+pyyaml==6.0.1
+loguru==0.7.2
+
+# Kafka Integration
+confluent-kafka==2.3.0  # For offset calculation optimization (better maintained than kafka-python)

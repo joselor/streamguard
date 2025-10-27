@@ -10,6 +10,7 @@ from pyspark.sql.types import StructType, StructField, StringType, DoubleType, L
 from loguru import logger
 from typing import Optional
 import yaml
+import json
 
 
 class KafkaEventReader:
@@ -40,6 +41,85 @@ class KafkaEventReader:
         logger.info("KafkaEventReader initialized with broker: {}",
                    self.kafka_config['bootstrap_servers'])
 
+    def calculate_end_offset_for_limit(
+        self,
+        start_offset: str,
+        max_events: int
+    ) -> str:
+        """
+        Calculate Kafka end offset to read only max_events (optimization).
+
+        This avoids reading the entire topic when only a small sample is needed.
+        Instead of reading 9.9M events and limiting to 1K, this reads ~1K events directly.
+
+        Args:
+            start_offset: Starting offset (earliest/latest)
+            max_events: Maximum events to read
+
+        Returns:
+            JSON string with calculated end offsets per partition
+        """
+        try:
+            from confluent_kafka import Consumer, TopicPartition, OFFSET_BEGINNING, OFFSET_END
+
+            # Create consumer for offset querying
+            consumer = Consumer({
+                'bootstrap.servers': self.kafka_config['bootstrap_servers'],
+                'group.id': f"{self.kafka_config['group_id']}_offset_calc",
+                'enable.auto.commit': False
+            })
+
+            topic = self.kafka_config['topic']
+
+            # Get topic metadata to find partitions
+            metadata = consumer.list_topics(topic, timeout=10)
+            if topic not in metadata.topics:
+                logger.warning(f"Topic not found: {topic}")
+                consumer.close()
+                return None
+
+            partitions = metadata.topics[topic].partitions
+            num_partitions = len(partitions)
+
+            if num_partitions == 0:
+                logger.warning(f"No partitions found for topic: {topic}")
+                consumer.close()
+                return None
+
+            # Calculate events per partition
+            partition_offsets = {}
+            events_per_partition = max(1, max_events // num_partitions)
+
+            for partition_id in sorted(partitions.keys()):
+                tp = TopicPartition(topic, partition_id)
+
+                # Get beginning/end offsets
+                if start_offset == "earliest":
+                    tp.offset = OFFSET_BEGINNING
+                    low, high = consumer.get_watermark_offsets(tp, timeout=10)
+                    start = low
+                else:
+                    tp.offset = OFFSET_END
+                    low, high = consumer.get_watermark_offsets(tp, timeout=10)
+                    start = high
+
+                # Calculate end offset (start + desired events)
+                end = start + events_per_partition
+                partition_offsets[str(partition_id)] = end
+
+            consumer.close()
+
+            # Return JSON format for Spark endingOffsets parameter
+            end_offset_json = json.dumps({topic: partition_offsets})
+            logger.info(f"Optimized Kafka read: calculated end offsets for ~{max_events} events across {num_partitions} partitions")
+            logger.debug(f"End offsets: {end_offset_json}")
+
+            return end_offset_json
+
+        except Exception as e:
+            logger.warning(f"Offset calculation failed: {e}. Falling back to full read.")
+            return None
+
     def read_batch(
         self,
         start_offset: str = "earliest",
@@ -58,6 +138,14 @@ class KafkaEventReader:
             DataFrame with parsed security events
         """
         logger.info("Reading batch from Kafka topic: {}", self.kafka_config['topic'])
+
+        # OPTIMIZATION: Calculate end offset if max_events specified
+        # This avoids reading the entire topic when only a small sample is needed
+        if max_events and not end_offset:
+            calculated_end_offset = self.calculate_end_offset_for_limit(start_offset, max_events)
+            if calculated_end_offset:
+                end_offset = calculated_end_offset
+                logger.info(f"Optimized read: limiting to ~{max_events} events via offset calculation")
 
         # Build Kafka read options
         kafka_options = {
