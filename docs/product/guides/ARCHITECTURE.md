@@ -122,15 +122,24 @@ graph TB
 
 #### 3. Serving Layer (Unified Query Interface)
 
-**Technology**: Java 17, Spring Boot 3.2, RocksDB Java API
+**Technology**: Java 17, Spring Boot 3.2, RocksDB Java API, Apache Parquet
 
 **Purpose**: Provide unified REST API for querying both real-time and batch results
 
 **Capabilities**:
-- **Real-time event queries** from RocksDB
+- **Real-time event queries** from RocksDB (speed layer)
+- **Batch ML anomaly queries** from Parquet files (batch layer - Sprint 12)
 - **Anomaly searches** with score filtering
-- **Statistics aggregation** across all data
+- **Statistics aggregation** across all data sources
+- **Training data reports** for ML pipeline monitoring
+- **Prometheus metrics** for Grafana dashboards
 - **RESTful API** with Swagger documentation
+
+**Sprint 12 Integration**:
+- Added TrainingDataService to read Spark ML outputs
+- Exposed `/api/training-data/*` endpoints for batch anomaly queries
+- Integrated batch anomalies into GenAI Assistant context
+- Added health checks for training data availability
 
 ### Lambda Architecture Benefits
 

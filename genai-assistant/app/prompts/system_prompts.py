@@ -16,8 +16,9 @@ Your role is to help security teams understand threats, anomalies, and patterns 
 You have access to:
 1. **Real-time security events** - login attempts, network traffic, system changes
 2. **Historical threat intelligence** - known attack patterns, IOCs, MITRE ATT&CK techniques
-3. **Anomaly scores** - statistical analysis of unusual behavior
-4. **Threat scores** - risk assessments for each event
+3. **Real-time anomaly detection** - streaming anomaly analysis from speed layer
+4. **Batch ML anomaly detection** - comprehensive historical behavior analysis from Spark ML pipeline
+5. **Threat scores** - risk assessments for each event
 
 ## Response Guidelines
 
@@ -165,26 +166,47 @@ def format_threat_intel(intel: List[Dict[str, Any]]) -> str:
 
 
 def format_anomalies(anomalies: Dict[str, Any]) -> str:
-    """Format anomaly detection results for prompt"""
+    """
+    Format anomaly detection results for prompt
+
+    Lambda Architecture integration (Sprint 12):
+    - Real-time anomalies from speed layer (C++ stream processor)
+    - Batch ML anomalies from batch layer (Spark ML pipeline)
+    """
     if not anomalies:
         return "No anomaly analysis available for this query."
 
-    score = anomalies.get('score', anomalies.get('anomaly_score', 0.0))
-    deviation = anomalies.get('deviation', 'N/A')
-    baseline = anomalies.get('baseline', 'N/A')
+    formatted = []
 
-    formatted = [
-        f"Anomaly Score: {score:.2f} (0.0 = normal, 1.0 = highly anomalous)",
-        f"Baseline Deviation: {deviation}",
-        f"User Baseline Events: {baseline}"
-    ]
+    # Real-time anomaly detection (speed layer)
+    if anomalies.get('realtime'):
+        realtime = anomalies['realtime']
+        formatted.append("**Real-time Anomaly Detection** (Speed Layer):")
+        formatted.append(f"  Anomaly Score: {realtime.get('score', 0.0):.2f} (0.0 = normal, 1.0 = highly anomalous)")
+        formatted.append(f"  Baseline Deviation: {realtime.get('deviation', 'N/A')}")
+        formatted.append(f"  User Baseline Events: {realtime.get('baseline', 'N/A')}")
 
-    # Add contributing factors if available
-    factors = anomalies.get('factors', {})
-    if factors:
-        formatted.append("\nContributing Factors:")
-        for factor, value in factors.items():
-            formatted.append(f"  - {factor}: {value}")
+    # Batch ML anomaly detection (batch layer - Spark ML)
+    if anomalies.get('batch_ml'):
+        batch = anomalies['batch_ml']
+        if formatted:
+            formatted.append("")  # Blank line separator
+        formatted.append("**Batch ML Anomaly Detection** (Spark ML Pipeline):")
+        formatted.append(f"  Anomaly Score: {batch.get('anomaly_score', 0.0):.2f} (0.0 = normal, 1.0 = highly anomalous)")
+        formatted.append(f"  Total Events Analyzed: {batch.get('total_events', 0)}")
+        formatted.append(f"  Average Threat Score: {batch.get('avg_threat_score', 0.0):.2f}")
+        formatted.append(f"  Unique IPs: {batch.get('unique_ips', 0)}")
+        formatted.append(f"  Failed Auth Rate: {batch.get('failed_auth_rate', 0.0):.2%}")
+        formatted.append("  Note: Batch analysis provides comprehensive historical behavior patterns")
+
+    # Legacy format support (for backward compatibility)
+    if not anomalies.get('realtime') and not anomalies.get('batch_ml'):
+        score = anomalies.get('score', anomalies.get('anomaly_score', 0.0))
+        deviation = anomalies.get('deviation', 'N/A')
+        baseline = anomalies.get('baseline', 'N/A')
+        formatted.append(f"Anomaly Score: {score:.2f} (0.0 = normal, 1.0 = highly anomalous)")
+        formatted.append(f"Baseline Deviation: {deviation}")
+        formatted.append(f"User Baseline Events: {baseline}")
 
     return "\n".join(formatted)
 

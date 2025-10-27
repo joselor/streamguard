@@ -216,3 +216,71 @@ class JavaAPIClient:
                 return response.status_code == 200
         except Exception:
             return False
+
+    async def get_batch_anomaly(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch batch ML anomaly detection for user (Sprint 12)
+
+        Args:
+            user_id: User ID to lookup
+
+        Returns:
+            Batch anomaly data if user flagged, None otherwise
+        """
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(
+                    f"{self.base_url}/api/training-data/anomalies/{user_id}"
+                )
+
+                if response.status_code == 200:
+                    logger.info(f"Batch anomaly found for user: {user_id}")
+                    return response.json()
+                elif response.status_code == 404:
+                    logger.debug(f"No batch anomaly for user: {user_id}")
+                    return None
+                else:
+                    logger.warning(f"Unexpected status fetching batch anomaly: {response.status_code}")
+                    return None
+
+        except Exception as e:
+            logger.warning(f"Batch anomaly fetch failed for {user_id}: {e}")
+            return None
+
+    async def get_batch_anomaly_report(self) -> Optional[Dict[str, Any]]:
+        """
+        Fetch batch ML anomaly detection summary report (Sprint 12)
+
+        Returns:
+            Anomaly report with total users and top anomalies
+        """
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(
+                    f"{self.base_url}/api/training-data/report"
+                )
+
+                if response.status_code == 200:
+                    logger.debug("Batch anomaly report fetched successfully")
+                    return response.json()
+                else:
+                    logger.warning(f"Anomaly report not available: {response.status_code}")
+                    return None
+
+        except Exception as e:
+            logger.warning(f"Anomaly report fetch failed: {e}")
+            return None
+
+    async def check_training_data_health(self) -> bool:
+        """
+        Check if batch training data is available (Sprint 12)
+
+        Returns:
+            True if training data is available, False otherwise
+        """
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"{self.base_url}/api/training-data/health")
+                return response.status_code == 200
+        except Exception:
+            return False

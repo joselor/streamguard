@@ -61,21 +61,21 @@ Lambda Architecture handles both real-time and batch processing:
            │ • Anomalies │      │ • Training  │
            └──────┬──────┘      └──────┬──────┘
                   │                    │
-                  │                    ▼
-                  │            ┌──────────────┐
-                  │            │ Training Data│
-                  │            │  (Parquet)   │
-                  │            └──────────────┘
-                  │
-                  ▼
-           ┌────────────────────┐
-           │   SERVING LAYER    │
-           │                    │
-           │  • Query API       │
-           │  • RocksDB         │
-           │  • REST endpoints  │
-           │  • Grafana         │
-           └────────────────────┘
+                  │  RocksDB           │  Parquet
+                  │                    │
+                  └────────┬───────────┘
+                           │
+                           ▼
+           ┌───────────────────────────────┐
+           │      SERVING LAYER            │
+           │                               │
+           │  • Java Query API (Sprint 12) │
+           │  • Reads RocksDB + Parquet    │
+           │  • REST endpoints             │
+           │  • Training data API          │
+           │  • Prometheus metrics         │
+           │  • Grafana dashboards         │
+           └───────────────────────────────┘
 ```
 
 ### Benefits
@@ -247,6 +247,39 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:8088']
 ```
+
+### 5. Serving Layer Integration (Sprint 12)
+
+The Query API now reads from both layers:
+
+```java
+// TrainingDataService.java
+public AnomalyReport getAnomalyReport() throws IOException {
+    File reportFile = new File(trainingDataPath + "/anomaly_report.json");
+    return objectMapper.readValue(reportFile, AnomalyReport.class);
+}
+
+public BatchAnomaly getAnomalyForUser(String userId) throws IOException {
+    List<BatchAnomaly> anomalies = getAnomalies();
+    return anomalies.stream()
+        .filter(a -> userId.equals(a.getUser()))
+        .findFirst()
+        .orElse(null);
+}
+```
+
+**New REST Endpoints**:
+- `GET /api/training-data/report` - Anomaly detection summary
+- `GET /api/training-data/anomalies` - All batch anomalies
+- `GET /api/training-data/anomalies/{userId}` - User-specific batch anomaly
+- `GET /api/training-data/health` - Training data availability
+- `GET /api/training-data/stats` - Training data statistics
+- `GET /api/metrics` - Prometheus metrics including batch ML stats
+
+**GenAI Integration**:
+- SecurityAssistant now fetches both real-time and batch anomalies
+- LLM context includes comprehensive historical behavior patterns
+- Improved confidence scoring with dual-layer anomaly detection
 
 ---
 

@@ -218,6 +218,19 @@ async def health_check():
     # Update metric
     metrics.update_dependency_health("rag_service", services_status["rag_service"])
 
+    # Check Training Data availability (Sprint 12 - Batch ML Layer)
+    try:
+        if java_api:
+            services_status["training_data"] = await java_api.check_training_data_health()
+        else:
+            services_status["training_data"] = False
+    except Exception as e:
+        logger.error(f"Training data health check failed: {str(e)}")
+        services_status["training_data"] = False
+
+    # Update metric
+    metrics.update_dependency_health("training_data", services_status["training_data"])
+
     # Check LLM provider (OpenAI or Ollama)
     try:
         if assistant and hasattr(assistant, 'llm'):

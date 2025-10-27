@@ -123,7 +123,7 @@ class SecurityAssistant:
                     "threat_intel": self._format_threat_intel(threat_intel),
                     "recommended_actions": recommendations,
                     "query_time_ms": query_time_ms,
-                    "sources_used": self._get_sources_used(events, threat_intel)
+                    "sources_used": self._get_sources_used(events, threat_intel, anomalies)
                 }
 
                 # Record query metrics
@@ -179,32 +179,52 @@ class SecurityAssistant:
         return events, threat_intel
 
     async def _get_anomaly_context(self, user_id: str) -> dict:
-        """Get anomaly detection information"""
+        """
+        Get anomaly detection information from both layers
+
+        Lambda Architecture integration:
+        - Real-time anomalies from speed layer (C++ stream processor)
+        - Batch ML anomalies from batch layer (Spark ML pipeline)
+        """
         if not user_id:
             return {}
 
+        anomaly_context = {}
+
+        # Fetch real-time anomalies (speed layer)
         try:
             anomalies = await self.java_api.get_anomalies(limit=10, min_score=0.7)
-            # Filter to user if available
             user_anomalies = [
                 a for a in anomalies
                 if a.get('user') == user_id
             ]
 
             if user_anomalies:
-                # Return summary of highest anomaly
                 top_anomaly = max(user_anomalies, key=lambda x: x.get('anomaly_score', 0))
-                return {
+                anomaly_context["realtime"] = {
                     "score": top_anomaly.get('anomaly_score', 0),
                     "deviation": top_anomaly.get('deviation', 'N/A'),
                     "baseline": top_anomaly.get('baseline_events', 'N/A')
                 }
-
-            return {}
-
         except Exception as e:
-            logger.error(f"Error fetching anomalies: {str(e)}")
-            return {}
+            logger.error(f"Error fetching real-time anomalies: {str(e)}")
+
+        # Fetch batch ML anomalies (batch layer - Sprint 12)
+        try:
+            batch_anomaly = await self.java_api.get_batch_anomaly(user_id)
+            if batch_anomaly:
+                anomaly_context["batch_ml"] = {
+                    "anomaly_score": batch_anomaly.get('anomalyScore', 0),
+                    "total_events": batch_anomaly.get('totalEvents', 0),
+                    "avg_threat_score": batch_anomaly.get('avgThreatScore', 0),
+                    "unique_ips": batch_anomaly.get('uniqueIps', 0),
+                    "failed_auth_rate": batch_anomaly.get('failedAuthRate', 0)
+                }
+                logger.info(f"Batch ML anomaly found for user {user_id}: score={batch_anomaly.get('anomalyScore')}")
+        except Exception as e:
+            logger.error(f"Error fetching batch ML anomalies: {str(e)}")
+
+        return anomaly_context
 
     def _extract_recommendations(self, answer: str) -> list:
         """
@@ -257,9 +277,12 @@ class SecurityAssistant:
             avg_relevance = sum(t.get('relevance_score', 0) for t in threat_intel) / len(threat_intel)
             confidence += avg_relevance * 0.2
 
-        # Boost for anomaly data
+        # Boost for anomaly data (real-time and/or batch ML)
         if anomalies:
-            confidence += 0.1
+            if anomalies.get('realtime'):
+                confidence += 0.05  # Real-time anomaly
+            if anomalies.get('batch_ml'):
+                confidence += 0.1   # Batch ML anomaly (more comprehensive analysis)
 
         return min(0.99, confidence)
 
@@ -283,14 +306,20 @@ class SecurityAssistant:
         """Format threat intelligence for response model"""
         return threat_intel[:settings.max_threat_intel_results]
 
-    def _get_sources_used(self, events: list, threat_intel: list) -> list:
+    def _get_sources_used(self, events: list, threat_intel: list, anomalies: dict = None) -> list:
         """Determine which sources were successfully queried"""
-        sources = ["openai"]  # OpenAI always used
+        # Determine LLM provider from settings
+        llm_source = settings.llm_provider  # "openai" or "ollama"
+        sources = [llm_source]
 
         if events:
             sources.append("java_api")
 
         if threat_intel:
             sources.append("rag_service")
+
+        # Add batch ML source if available (Sprint 12 - Lambda Architecture)
+        if anomalies and anomalies.get('batch_ml'):
+            sources.append("batch-ml")
 
         return sources
